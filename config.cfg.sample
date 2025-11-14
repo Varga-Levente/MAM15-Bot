@@ -1,0 +1,10 @@
+{
+  "wifi": {
+    "ssid": "VLevente",
+    "password": "12341234"
+  },
+  "camera": {
+    "frame_size": "SVGA",
+    "jpeg_quality": 30
+  }
+}
