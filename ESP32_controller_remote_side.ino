@@ -10,7 +10,7 @@
 #define LORA_BAND 433E6
 
 // ======= ROBOT CÍMZÉS + TITKOSÍTÁS =======
-#define ROBOT_ID 0x169
+#define ROBOT_ID 0x69
 #define SECRET_KEY 0b11011010
 
 // Irány gombok
@@ -70,4 +70,5 @@ void loop() {
   delay(50);
 
 }
+
 
