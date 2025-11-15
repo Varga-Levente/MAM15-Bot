@@ -1,7 +1,7 @@
 #include <SPI.h>
 #include <LoRa.h>
 
-#define LORA_SCK 15
+#define LORA_SCK 18
 #define LORA_MISO 19
 #define LORA_MOSI 23
 #define LORA_SS 5
@@ -14,14 +14,14 @@
 #define SECRET_KEY 0b11011010
 
 // Irány gombok
-#define BTN_FORWARD 32
-#define BTN_BACK    33
-#define BTN_LEFT    25
-#define BTN_RIGHT   26
+#define BTN_FORWARD 25
+#define BTN_BACK    26
+#define BTN_LEFT    32
+#define BTN_RIGHT   33
 
 // Sebesség gombok
 #define BTN_FAST    27
-#define BTN_SLOW    14
+#define BTN_SLOW    13
 
 void setup() {
   Serial.begin(115200);
@@ -70,3 +70,4 @@ void loop() {
   delay(50);
 
 }
+
