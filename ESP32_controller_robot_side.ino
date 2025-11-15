@@ -27,10 +27,11 @@ byte motorSpeed = 150; // alap sebesség
 void setup() {
   Serial.begin(115200);
 
-  ledcAttach(MOTOR_LEFT_FORWARD, 0);
-  ledcAttach(MOTOR_LEFT_BACK,    1);
-  ledcAttach(MOTOR_RIGHT_FORWARD,2);
-  ledcAttach(MOTOR_RIGHT_BACK,   3);
+  // ===== Motor PWM pin-ek beállítása =====
+  ledcAttach(MOTOR_LEFT_FORWARD,  PWM_FREQ, PWM_RES);
+  ledcAttach(MOTOR_LEFT_BACK,     PWM_FREQ, PWM_RES);
+  ledcAttach(MOTOR_RIGHT_FORWARD, PWM_FREQ, PWM_RES);
+  ledcAttach(MOTOR_RIGHT_BACK,    PWM_FREQ, PWM_RES);
 
   SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_SS);
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
