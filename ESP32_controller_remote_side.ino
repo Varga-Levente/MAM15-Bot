@@ -1,7 +1,6 @@
 #include <SPI.h>
 #include <LoRa.h>
 
-// LoRa pin beállítások
 #define LORA_SCK 5
 #define LORA_MISO 19
 #define LORA_MOSI 27
@@ -9,6 +8,10 @@
 #define LORA_RST 14
 #define LORA_DIO0 26
 #define LORA_BAND 433E6
+
+// ======= ROBOT CÍMZÉS + TITKOSÍTÁS =======
+#define ROBOT_ID 0x169
+#define SECRET_KEY 0b11011010
 
 // Irány gombok
 #define BTN_FORWARD 32
@@ -23,17 +26,13 @@
 void setup() {
   Serial.begin(115200);
 
-  // Irány gombok
   pinMode(BTN_FORWARD, INPUT_PULLUP);
   pinMode(BTN_BACK, INPUT_PULLUP);
   pinMode(BTN_LEFT, INPUT_PULLUP);
   pinMode(BTN_RIGHT, INPUT_PULLUP);
-
-  // Sebesség gombok
   pinMode(BTN_FAST, INPUT_PULLUP);
   pinMode(BTN_SLOW, INPUT_PULLUP);
 
-  // LoRa inicializálás
   SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_SS);
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
 
@@ -41,29 +40,32 @@ void setup() {
     Serial.println("LoRa init failed!");
     while (1);
   }
-  Serial.println("LoRa init OK!");
+  Serial.println("LoRa OK");
 }
 
 void loop() {
   byte data = 0;
 
-  // Irány gombok
   if (digitalRead(BTN_FORWARD) == LOW) data |= 0b00000001;
   if (digitalRead(BTN_BACK)    == LOW) data |= 0b00000010;
   if (digitalRead(BTN_LEFT)    == LOW) data |= 0b00000100;
   if (digitalRead(BTN_RIGHT)   == LOW) data |= 0b00001000;
 
-  // Sebesség gombok
   if (digitalRead(BTN_FAST) == LOW) data |= 0b00010000;
   if (digitalRead(BTN_SLOW) == LOW) data |= 0b00100000;
 
-  // Küldés LoRa-n
+  // Titkosítás
+  byte encrypted = data ^ SECRET_KEY;
+
   LoRa.beginPacket();
-  LoRa.write(data);
+  LoRa.write(ROBOT_ID);      // Cél robot
+  LoRa.write(encrypted);     // Titkosított parancs
   LoRa.endPacket();
 
-  Serial.print("Sent: ");
-  Serial.println(data, BIN);
+  Serial.print("Sent raw: ");
+  Serial.print(data, BIN);
+  Serial.print("  encrypted: ");
+  Serial.println(encrypted, BIN);
 
   delay(50);
 }
