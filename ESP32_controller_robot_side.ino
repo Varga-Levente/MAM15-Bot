@@ -1,12 +1,12 @@
 #include <SPI.h>
 #include <LoRa.h>
 
-#define LORA_SCK 5
+#define LORA_SCK 15
 #define LORA_MISO 19
-#define LORA_MOSI 27
-#define LORA_SS 18
+#define LORA_MOSI 23
+#define LORA_SS 5
 #define LORA_RST 14
-#define LORA_DIO0 26
+#define LORA_DIO0 2
 #define LORA_BAND 433E6
 
 // ======= ROBOT CÍMZÉS + TITKOSÍTÁS =======
@@ -105,4 +105,5 @@ void stopMotors() {
   ledcWrite(PWM_CHANNEL_LB, 0);
   ledcWrite(PWM_CHANNEL_RF, 0);
   ledcWrite(PWM_CHANNEL_RB, 0);
+
 }
