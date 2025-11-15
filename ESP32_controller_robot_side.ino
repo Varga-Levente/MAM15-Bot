@@ -10,7 +10,7 @@
 #define LORA_BAND 433E6
 
 // ===== ROBOT CÍMZÉS + DEKÓDOLÁS =====
-#define MY_ROBOT_ID 0x169
+#define MY_ROBOT_ID 0x69
 #define SECRET_KEY 0b11011010
 
 // ===== MOTOR PIN-EK =====
@@ -21,6 +21,11 @@
 
 #define PWM_FREQ 1000
 #define PWM_RES 8
+
+// ===== DEBOUNCE =====
+byte lastData = 0;
+unsigned long lastStableTime = 0;
+const unsigned long DEBOUNCE_MS = 25;
 
 byte motorSpeed = 150; // alap sebesség
 
@@ -51,17 +56,28 @@ void loop() {
     byte encrypted = LoRa.read();
     byte data = encrypted ^ SECRET_KEY;
 
-    Serial.print("CMD: ");
-    Serial.println(data, BIN);
+    unsigned long now = millis();
+    
+    // Ha az adat változott, reseteljük a számlálót
+    if (data != lastData) {
+      lastData = data;
+      lastStableTime = now;
+    }
 
-    if (data & 0b00010000) motorSpeed = 255;
-    else if (data & 0b00100000) motorSpeed = 150;
+    // Ha legalább 25 ms stabil, akkor hajtsuk végre
+    if (now - lastStableTime >= DEBOUNCE_MS) {
+      Serial.print("CMD: ");
+      Serial.println(data, BIN);
 
-    if (data & 0b00000001) moveForward();
-    else if (data & 0b00000010) moveBackward();
-    else if (data & 0b00000100) turnLeft();
-    else if (data & 0b00001000) turnRight();
-    else stopMotors();
+      if (data & 0b00010000) motorSpeed = 255;
+      else if (data & 0b00100000) motorSpeed = 150;
+
+      if (data & 0b00000001) moveForward();
+      else if (data & 0b00000010) moveBackward();
+      else if (data & 0b00000100) turnLeft();
+      else if (data & 0b00001000) turnRight();
+      else stopMotors();
+    }
   }
 }
 
