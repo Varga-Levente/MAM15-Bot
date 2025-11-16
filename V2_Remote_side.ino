@@ -1,7 +1,11 @@
 #include <SPI.h>
 #include <LoRa.h>
-#include "CRC16.h"
 
+// ---- CRC beállítások ----
+uint16_t CRC_SEED   = 0x1D0F;      // Kezdő érték (seed)
+uint16_t CRC_POLY   = 0x1021;      // Polinom (CCITT alapértelmezett)
+
+// ---- Lora beállítások ----
 #define LORA_SCK 18
 #define LORA_MISO 19
 #define LORA_MOSI 23
@@ -12,56 +16,72 @@
 
 #define ROBOT_ID 69
 
-// Irány gombok
-#define BTN_LF 32
-#define BTN_LB 33
-#define BTN_RF 25
-#define BTN_RB 26
-
-// Sebesség gomb
+// ---- Gombok ----
+#define BTN_FWD 32
+#define BTN_BACK 33
+#define BTN_LEFT 25
+#define BTN_RIGHT 26
 #define BTN_SPEED 27
+
+bool lastSpeedBtn = false;
+bool speedFlag = false;
+
+// ==== CRC számoló ====
+uint16_t calcCRC(uint8_t *data, uint8_t len) {
+  uint16_t crc = CRC_SEED;
+
+  for (uint8_t i = 0; i < len; i++) {
+    crc ^= (uint16_t)data[i] << 8;
+    for (uint8_t j = 0; j < 8; j++)
+      crc = (crc & 0x8000) ? (crc << 1) ^ CRC_POLY : (crc << 1);
+  }
+
+  return crc;
+}
 
 void setup() {
   Serial.begin(115200);
 
-  pinMode(BTN_LF, INPUT_PULLUP);
-  pinMode(BTN_LB, INPUT_PULLUP);
-  pinMode(BTN_RF, INPUT_PULLUP);
-  pinMode(BTN_RB, INPUT_PULLUP);
+  pinMode(BTN_FWD, INPUT_PULLUP);
+  pinMode(BTN_BACK, INPUT_PULLUP);
+  pinMode(BTN_LEFT, INPUT_PULLUP);
+  pinMode(BTN_RIGHT, INPUT_PULLUP);
   pinMode(BTN_SPEED, INPUT_PULLUP);
 
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
-
-  if (!LoRa.begin(LORA_BAND)) {
-    Serial.println("LoRa init failed!");
-    while (1);
-  }
-
+  LoRa.begin(LORA_BAND);
   Serial.println("TX Ready");
 }
 
 void loop() {
   byte cmd = 0;
 
-  if (!digitalRead(BTN_LF)) cmd |= 0b00000001;
-  if (!digitalRead(BTN_LB)) cmd |= 0b00000010;
-  if (!digitalRead(BTN_RF)) cmd |= 0b00000100;
-  if (!digitalRead(BTN_RB)) cmd |= 0b00001000;
+  if (!digitalRead(BTN_FWD))  cmd |= 0b00000001;
+  if (!digitalRead(BTN_BACK)) cmd |= 0b00000010;
+  if (!digitalRead(BTN_RIGHT)) cmd |= 0b00000100;
+  if (!digitalRead(BTN_LEFT))  cmd |= 0b00001000;
 
-  byte speedBtn = (!digitalRead(BTN_SPEED) ? 1 : 0);
+  bool speedBtn = !digitalRead(BTN_SPEED);
 
-  byte packet[3];
-  packet[0] = ROBOT_ID;
-  packet[1] = cmd;
-  packet[2] = speedBtn;
+  if (speedBtn && !lastSpeedBtn)
+    speedFlag = true;
+  else
+    speedFlag = false;
 
-  uint16_t crc = CRC16.ccitt(packet, 3);
+  lastSpeedBtn = speedBtn;
+
+  uint8_t pkt[3];
+  pkt[0] = ROBOT_ID;
+  pkt[1] = cmd;
+  pkt[2] = speedFlag;
+
+  uint16_t crc = calcCRC(pkt, 3);
 
   LoRa.beginPacket();
-  LoRa.write(packet, 3);
-  LoRa.write((crc >> 8) & 0xFF); // CRC High byte
-  LoRa.write(crc & 0xFF);        // CRC Low byte
+  LoRa.write(pkt, 3);
+  LoRa.write(crc >> 8);
+  LoRa.write(crc & 0xFF);
   LoRa.endPacket();
 
-  delay(50); // 20 Hz küldés
+  delay(60);
 }
