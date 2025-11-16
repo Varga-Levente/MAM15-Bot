@@ -9,17 +9,19 @@
 #define LORA_DIO0 2
 #define LORA_BAND 433E6
 
-// ===== ROBOT CÍMZÉS + TITKOSÍTÁS =====
 #define ROBOT_ID 0x69
 #define SECRET_KEY 0b11011010
 
-// ===== GOMBOK =====
 #define BTN_LEFT_FWD     25
 #define BTN_LEFT_BACK    26
 #define BTN_RIGHT_FWD    32
 #define BTN_RIGHT_BACK   33
-#define BTN_SPEED        27   // toggle request
-#define BTN_UNUSED       13   // későbbi funkció
+#define BTN_SPEED        27
+#define BTN_UNUSED       13
+
+byte calcChecksum(byte id, byte cmd) {
+  return (id + cmd) & 0xFF;        // ✔ KÖNNYEN ÁTÍRHATÓ
+}
 
 void setup() {
   Serial.begin(115200);
@@ -35,11 +37,9 @@ void setup() {
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
 
   if (!LoRa.begin(LORA_BAND)) {
-    Serial.println("LoRa init failed!");
+    Serial.println("LoRa init ERROR!");
     while (1);
   }
-
-  Serial.println("🚀 Remote Ready!");
 }
 
 void loop() {
@@ -49,26 +49,15 @@ void loop() {
   if (digitalRead(BTN_LEFT_BACK)  == LOW) cmd |= 0b00000010;
   if (digitalRead(BTN_RIGHT_FWD)  == LOW) cmd |= 0b00000100;
   if (digitalRead(BTN_RIGHT_BACK) == LOW) cmd |= 0b00001000;
+  if (digitalRead(BTN_SPEED)      == LOW) cmd |= 0b00010000;
 
-  if (digitalRead(BTN_SPEED) == LOW) cmd |= 0b00010000; // speed toggle request
-
-  byte checksum = (ROBOT_ID + cmd) & 0xFF;
-
-  byte encCmd = cmd ^ SECRET_KEY;
-  byte encChk = checksum ^ SECRET_KEY;
+  byte checksum = calcChecksum(ROBOT_ID, cmd);
 
   LoRa.beginPacket();
   LoRa.write(ROBOT_ID);
-  LoRa.write(encCmd);
-  LoRa.write(encChk);
+  LoRa.write(cmd ^ SECRET_KEY);
+  LoRa.write(checksum ^ SECRET_KEY);
   LoRa.endPacket();
-
-  Serial.print("CMD RAW: ");
-  Serial.print(cmd, BIN);
-  Serial.print(" ENC: ");
-  Serial.print(encCmd, BIN);
-  Serial.print(" CHK: ");
-  Serial.println(encChk, BIN);
 
   delay(50);
 }
