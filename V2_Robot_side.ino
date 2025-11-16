@@ -20,9 +20,9 @@
 #define CRC_FINAL_XOR_VALUE 0x0000  // CRC végső XOR értéke
 
 // ===== Motor vezérlő pin definíciók =====
-#define LEFT_MOTOR_FORWARD_PIN 12
-#define LEFT_MOTOR_REVERSE_PIN 13
-#define RIGHT_MOTOR_FORWARD_PIN 27
+#define LEFT_MOTOR_FORWARD_PIN 32
+#define LEFT_MOTOR_REVERSE_PIN 27
+#define RIGHT_MOTOR_FORWARD_PIN 25
 #define RIGHT_MOTOR_REVERSE_PIN 26
 
 // ===== PWM beállítások =====
