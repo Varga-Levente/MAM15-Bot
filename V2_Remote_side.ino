@@ -17,6 +17,7 @@
 // ===== CRC ellenőrzés beállításai =====
 #define CRC_POLYNOMIAL 0x1021
 #define CRC_INITIAL_VALUE 0xFFFF
+#define CRC_FINAL_XOR_VALUE 0x0000  // CRC végső XOR értéke
 
 // ===== Irányító gombok pin definíciói =====
 #define FORWARD_BUTTON_PIN 32
@@ -29,8 +30,9 @@
 bool previousSpeedButtonState = false;  // Előző sebesség gomb állapot
 bool speedChangeFlag = false;           // Sebesség váltás jelző
 
-// ===== CRC számoló objektum =====
-CRC16 crcCalculator(CRC_POLYNOMIAL, CRC_INITIAL_VALUE, 0x0000, 0x0000, true, true);
+// ===== CRC számoló objektum - JAVÍTOTT KONSTRUKTOR =====
+// Paraméterek: polynomial, initial, xorOut, reverseIn, reverseOut
+CRC16 crcCalculator(CRC_POLYNOMIAL, CRC_INITIAL_VALUE, CRC_FINAL_XOR_VALUE, true, true);
 
 // =============================== ALAPBEÁLLÍTÁS =================================
 void setup() {
@@ -62,7 +64,7 @@ void setup() {
 void loop() {
   byte motorCommandByte = 0; // Motor parancsok bitmezője
 
-  // ===== GOMB ÁLLAPOTOK BEOLVASÁSA ÉS PARANCCÁ ALAKÍTÁSA =====
+  // ===== GOMB ÁLLAPOTOK BEOLVASÁSA ÉS PARANCCSÁ ALAKÍTÁSA =====
   // Minden gomb aktív alacsony (LOW), mert PULLUP bemenetek
   
   // Előre gomb - Bal motor előre (bit 0)
