@@ -10,28 +10,33 @@
 #define LORA_DIO0 2
 #define LORA_BAND 433E6
 
-#define ROBOT_ID 1
+#define ROBOT_ID 69
 
-#define BTN_LF  32
-#define BTN_LB  33
-#define BTN_RF  25
-#define BTN_RB  26
+// Irány gombok
+#define BTN_LF 32
+#define BTN_LB 33
+#define BTN_RF 25
+#define BTN_RB 26
+
+// Sebesség gomb
 #define BTN_SPEED 27
 
 void setup() {
+  Serial.begin(115200);
+
   pinMode(BTN_LF, INPUT_PULLUP);
   pinMode(BTN_LB, INPUT_PULLUP);
   pinMode(BTN_RF, INPUT_PULLUP);
   pinMode(BTN_RB, INPUT_PULLUP);
   pinMode(BTN_SPEED, INPUT_PULLUP);
 
-  Serial.begin(115200);
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
 
   if (!LoRa.begin(LORA_BAND)) {
-    Serial.println("LoRa failed!");
+    Serial.println("LoRa init failed!");
     while (1);
   }
+
   Serial.println("TX Ready");
 }
 
@@ -54,9 +59,9 @@ void loop() {
 
   LoRa.beginPacket();
   LoRa.write(packet, 3);
-  LoRa.write((crc >> 8) & 0xFF);
-  LoRa.write(crc & 0xFF);
+  LoRa.write((crc >> 8) & 0xFF); // CRC High byte
+  LoRa.write(crc & 0xFF);        // CRC Low byte
   LoRa.endPacket();
 
-  delay(50);
+  delay(50); // 20 Hz küldés
 }
