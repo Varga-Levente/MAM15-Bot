@@ -17,6 +17,7 @@
 // ===== CRC ellenőrzés beállításai =====
 #define CRC_POLYNOMIAL 0x1021
 #define CRC_INITIAL_VALUE 0xFFFF
+#define CRC_FINAL_XOR_VALUE 0x0000  // CRC végső XOR értéke
 
 // ===== Motor vezérlő pin definíciók =====
 #define LEFT_MOTOR_FORWARD_PIN 12
@@ -38,7 +39,7 @@ unsigned long lastReceivedPacketTime = 0;        // Utolsó csomag érkezéséne
 const unsigned long FAILSAFE_TIMEOUT_MS = 300;   // 300 ms után leállítja a motort
 
 // ===== CRC számoló objektum =====
-CRC16 crcCalculator(CRC_POLYNOMIAL, CRC_INITIAL_VALUE, 0x0000, 0x0000, true, true);
+CRC16 crcCalculator(CRC_POLYNOMIAL, CRC_INITIAL_VALUE, CRC_FINAL_XOR_VALUE, true, true);
 
 // =============================== ALAPBEÁLLÍTÁS =================================
 void setup() {
@@ -46,35 +47,28 @@ void setup() {
   Serial.println("🤖 Robot indítása...");
 
   // ===== PWM INICIALIZÁLÁSA AZ ÚJ LEDC API-VAL =====
-  // Minden motor pin-hez PWM csatorna társítása automatikus csatorna kiválasztással
-  
   bool pwmSetupSuccessful = true;
   
-  // Bal motor előre PWM beállítása
   if (!ledcAttach(LEFT_MOTOR_FORWARD_PIN, PWM_FREQUENCY, PWM_RESOLUTION)) {
     Serial.println("❌ Hiba: Bal motor előre PWM inicializálás sikertelen!");
     pwmSetupSuccessful = false;
   }
   
-  // Bal motor hátra PWM beállítása
   if (!ledcAttach(LEFT_MOTOR_REVERSE_PIN, PWM_FREQUENCY, PWM_RESOLUTION)) {
     Serial.println("❌ Hiba: Bal motor hátra PWM inicializálás sikertelen!");
     pwmSetupSuccessful = false;
   }
   
-  // Jobb motor előre PWM beállítása
   if (!ledcAttach(RIGHT_MOTOR_FORWARD_PIN, PWM_FREQUENCY, PWM_RESOLUTION)) {
     Serial.println("❌ Hiba: Jobb motor előre PWM inicializálás sikertelen!");
     pwmSetupSuccessful = false;
   }
   
-  // Jobb motor hátra PWM beállítása
   if (!ledcAttach(RIGHT_MOTOR_REVERSE_PIN, PWM_FREQUENCY, PWM_RESOLUTION)) {
     Serial.println("❌ Hiba: Jobb motor hátra PWM inicializálás sikertelen!");
     pwmSetupSuccessful = false;
   }
 
-  // Ha valamelyik PWM beállítás sikertelen, hibaüzenet és leállás
   if (!pwmSetupSuccessful) {
     Serial.println("❌ Kritikus hiba: PWM inicializálás sikertelen! A rendszer leáll.");
     while (1) {
@@ -98,67 +92,112 @@ void setup() {
 }
 
 // =============================== MOTOR VEZÉRLŐ FÜGGVÉNYEK ==============================
-
-/**
- * Motorok vezérlése a megadott irányok szerint
- * @param leftForward - Bal motor előre irány
- * @param leftBackward - Bal motor hátra irány  
- * @param rightForward - Jobb motor előre irány
- * @param rightBackward - Jobb motor hátra irány
- */
 void controlMotors(bool leftForward, bool leftBackward, bool rightForward, bool rightBackward) {
   int currentSpeed = motorSpeedLevels[currentSpeedLevelIndex];
   
-  // Motorok PWM jeleinek beállítása - most már közvetlenül a pin-ekre írunk
-  // Az új LEDC API automatikusan kezeli a csatornákat a pin-ek mögött
   ledcWrite(LEFT_MOTOR_FORWARD_PIN, leftForward ? currentSpeed : 0);
   ledcWrite(LEFT_MOTOR_REVERSE_PIN, leftBackward ? currentSpeed : 0);
   ledcWrite(RIGHT_MOTOR_FORWARD_PIN, rightForward ? currentSpeed : 0);
   ledcWrite(RIGHT_MOTOR_REVERSE_PIN, rightBackward ? currentSpeed : 0);
 }
 
-/**
- * Minden motor azonnali leállítása
- */
 void stopAllMotors() {
   controlMotors(false, false, false, false);
-  Serial.println("🛑 Minden motor leállítva");
+}
+
+/**
+ * Gomb állapotok kiírása a kapott parancs byte alapján
+ * @param command - A motor parancs byte (8 bites)
+ */
+void printButtonStates(byte command) {
+  Serial.print("🎮 Gomb állapotok: [");
+  
+  // Bitminta kiírása
+  for (int i = 7; i >= 0; i--) {
+    Serial.print(bitRead(command, i));
+    if (i == 4) Serial.print(" "); // Szóköz a jobb/bal motorok között
+  }
+  Serial.print("] - ");
+  
+  // Gombok szöveges értelmezése
+  bool anyButtonPressed = false;
+  
+  if (command & 0b0001) { // Bal motor előre
+    Serial.print("BAL_ELŐRE ");
+    anyButtonPressed = true;
+  }
+  if (command & 0b0010) { // Bal motor hátra
+    Serial.print("BAL_HÁTRA ");
+    anyButtonPressed = true;
+  }
+  if (command & 0b0100) { // Jobb motor előre
+    Serial.print("JOBB_ELŐRE ");
+    anyButtonPressed = true;
+  }
+  if (command & 0b1000) { // Jobb motor hátra
+    Serial.print("JOBB_HÁTRA ");
+    anyButtonPressed = true;
+  }
+  
+  if (!anyButtonPressed) {
+    Serial.print("NINCS GOMB NYOMVA");
+  }
+  
+  Serial.println();
+}
+
+/**
+ * Ellenőrzi az érvénytelen gomb kombinációkat
+ * @param command - A motor parancs byte
+ * @return true - ha érvényes a kombináció, false - ha érvénytelen
+ */
+bool validateCommand(byte command) {
+  // Ellenőrizzük, hogy ugyanaz a motor ne menjen egyszerre előre és hátra
+  bool leftConflict = (command & 0b0001) && (command & 0b0010);  // Bal előre + hátra
+  bool rightConflict = (command & 0b0100) && (command & 0b1000); // Jobb előre + hátra
+  
+  if (leftConflict) {
+    Serial.println("❌ ÉRVÉNYTELEN: Bal motor egyszerre előre és hátra!");
+    return false;
+  }
+  
+  if (rightConflict) {
+    Serial.println("❌ ÉRVÉNYTELEN: Jobb motor egyszerre előre és hátra!");
+    return false;
+  }
+  
+  return true;
 }
 
 // =============================== FŰ PROGRAMHURK =================================
 void loop() {
   // ===== BIZTONSÁGI LEÁLLÍTÁS (Failsafe) =====
-  // Ha túl sok idő telt el az utolsó érvényes csomag óta, motorok leállítása
   if (millis() - lastReceivedPacketTime > FAILSAFE_TIMEOUT_MS) {
     stopAllMotors();
-    // Biztonsági időzítő alaphelyzetbe állítása, hogy ne folyamatosan írja ki az üzenetet
-    lastReceivedPacketTime = millis() - FAILSAFE_TIMEOUT_MS + 1000; // 1 másodperc múlva újra
+    lastReceivedPacketTime = millis() - FAILSAFE_TIMEOUT_MS + 1000;
   }
 
   // ===== LoRa CSOMAG FELDOLGOZÁSA =====
   int receivedPacketSize = LoRa.parsePacket();
-  if (!receivedPacketSize) return; // Nincs csomag, kilépés
+  if (!receivedPacketSize) return;
   
-  // Csomag méret ellenőrzése (3 adat bájt + 2 CRC bájt = 5 bájt)
   if (receivedPacketSize != 5) {
     Serial.println("⚠️  Figyelmeztetés: Hibás csomag méret!");
     return;
   }
 
-  // Csomag adatainak beolvasása
   byte receivedPacket[5];
   for (int byteIndex = 0; byteIndex < 5; byteIndex++) {
     receivedPacket[byteIndex] = LoRa.read();
   }
 
   // ===== CRC ELLENŐRZÉS =====
-  uint16_t receivedCRC = (receivedPacket[3] << 8) | receivedPacket[4]; // CRC kinyerése
+  uint16_t receivedCRC = (receivedPacket[3] << 8) | receivedPacket[4];
   
-  crcCalculator.restart(); // CRC számoló alapállapotba
-  crcCalculator.add(receivedPacket, 3); // Első 3 bájt hozzáadása
-  uint16_t calculatedCRC = crcCalculator.getCRC(); // CRC kiszámítása
+  crcCalculator.restart();
+  crcCalculator.add(receivedPacket, 3);
+  uint16_t calculatedCRC = crcCalculator.getCRC();
 
-  // CRC ellenőrzése
   if (receivedCRC != calculatedCRC) {
     Serial.println("❌ Hibás CRC - csomag elvetve!");
     return;
@@ -166,17 +205,16 @@ void loop() {
 
   // ===== ROBOT AZONOSÍTÓ ELLENŐRZÉSE =====
   if (receivedPacket[0] != ROBOT_ID) {
-    return; // A csomag nem ehhez a robothoz tartozik
+    return;
   }
 
-  lastReceivedPacketTime = millis(); // Biztonsági időzítő alaphelyzetbe
+  lastReceivedPacketTime = millis();
 
   // ===== CSOMAG ADATAINAK KINYERÉSE =====
-  byte motorCommand = receivedPacket[1];     // Motor parancs bitmező
-  bool speedButtonPressed = receivedPacket[2]; // Sebesség váltó gomb állapota
+  byte motorCommand = receivedPacket[1];
+  bool speedButtonPressed = receivedPacket[2];
 
   // ===== SEBESSÉG VÁLTÁS KEZELÉSE =====
-  // Csak a gomb lenyomásának elején vált sebességet (rising edge detection)
   if (speedButtonPressed && !previousSpeedButtonState) {
     currentSpeedLevelIndex = (currentSpeedLevelIndex + 1) % 2;
     Serial.printf("⚡ Sebesség váltás: %d → %d\n", 
@@ -185,10 +223,20 @@ void loop() {
   }
   previousSpeedButtonState = speedButtonPressed;
 
+  // ===== GOMB ÁLLAPOTOK KIÍRÁSA =====
+  printButtonStates(motorCommand);
+
+  // ===== PARANCS ÉRVÉNYESSÉGÉNEK ELLENŐRZÉSE =====
+  if (!validateCommand(motorCommand)) {
+    Serial.println("🛑 Motorok leállítva érvénytelen parancs miatt");
+    stopAllMotors();
+    return;
+  }
+
   // ===== MOTOROK VEZÉRLÉSE =====
   if (motorCommand == 0) {
-    // Nincs gombnyomás - motorok leállítása
     stopAllMotors();
+    Serial.println("🛑 Minden motor leállítva");
   } else {
     // Motor parancsok végrehajtása bitenkénti ellenőrzéssel
     controlMotors(
@@ -197,5 +245,23 @@ void loop() {
       motorCommand & 0b0100,   // Jobb motor előre
       motorCommand & 0b1000    // Jobb motor hátra (MSB)
     );
+    
+    // Mozgás irányának kiírása
+    Serial.print("🚗 Mozgás: ");
+    if ((motorCommand & 0b0001) && (motorCommand & 0b0100)) {
+      Serial.println("EGYENESEN ELŐRE");
+    } else if ((motorCommand & 0b0010) && (motorCommand & 0b1000)) {
+      Serial.println("EGYENESEN HÁTRA");
+    } else if (motorCommand & 0b0001) {
+      Serial.println("BALRA FORDUL");
+    } else if (motorCommand & 0b0100) {
+      Serial.println("JOBBRA FORDUL");
+    } else if (motorCommand & 0b0010) {
+      Serial.println("BALRA HÁTRA");
+    } else if (motorCommand & 0b1000) {
+      Serial.println("JOBBRA HÁTRA");
+    }
   }
+  
+  Serial.println("---"); // Elválasztó a következő csomaghoz
 }
