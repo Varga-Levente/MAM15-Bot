@@ -1,5 +1,6 @@
 #include <SPI.h>
 #include <LoRa.h>
+#include "CRC16.h"
 
 #define LORA_SCK 18
 #define LORA_MISO 19
@@ -9,86 +10,83 @@
 #define LORA_DIO0 2
 #define LORA_BAND 433E6
 
-#define MY_ROBOT_ID 0x69
-#define SECRET_KEY 0b11011010
+#define ROBOT_ID 69
 
-#define MOTOR_LEFT_FORWARD   32
-#define MOTOR_LEFT_BACK      33
-#define MOTOR_RIGHT_FORWARD  25
-#define MOTOR_RIGHT_BACK     26
+// ===== MOTOR PINEK =====
+#define L_FWD 12
+#define L_REV 13
+#define R_FWD 27
+#define R_REV 26
 
-#define PWM_FREQ 1000
-#define PWM_RES  8
+// ===== Sebességek =====
+int speedLevels[2] = {120, 255}; // lassú, gyors
+int currentSpeedIndex = 0;
 
-// ====== 3 ÁLLÍTHATÓ SEBESSÉG ======
-byte speeds[3] = {120, 180, 255};
-byte speedIndex = 0;
-byte motorSpeed = speeds[0];
-
-// ====== ÁLLAPOTVÁLTOZÓK ======
 bool lastSpeedButton = false;
-
-// ====== CHECKSUM ======
-byte calcChecksum(byte id, byte cmd) {
-  return (id + cmd) & 0xFF;     // 🔄 BÁRMI MÁSRA CSERÉLHETŐ
-}
 
 void setup() {
   Serial.begin(115200);
 
-  ledcAttach(MOTOR_LEFT_FORWARD,   PWM_FREQ, PWM_RES);
-  ledcAttach(MOTOR_LEFT_BACK,      PWM_FREQ, PWM_RES);
-  ledcAttach(MOTOR_RIGHT_FORWARD,  PWM_FREQ, PWM_RES);
-  ledcAttach(MOTOR_RIGHT_BACK,     PWM_FREQ, PWM_RES);
+  ledcAttachPin(L_FWD, 0); // channel 0
+  ledcAttachPin(L_REV, 1);
+  ledcAttachPin(R_FWD, 2);
+  ledcAttachPin(R_REV, 3);
 
-  SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_SS);
+  ledcSetup(0, 1000, 8);
+  ledcSetup(1, 1000, 8);
+  ledcSetup(2, 1000, 8);
+  ledcSetup(3, 1000, 8);
+
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
 
-  LoRa.begin(LORA_BAND);
-  Serial.println("🤖 ROBOT READY");
+  if (!LoRa.begin(LORA_BAND)) {
+    Serial.println("LoRa error!");
+    while (1);
+  }
+
+  Serial.println("Robot RX Ready");
+}
+
+void drive(int lf, int lb, int rf, int rb) {
+  ledcWrite(0, lf ? speedLevels[currentSpeedIndex] : 0);
+  ledcWrite(1, lb ? speedLevels[currentSpeedIndex] : 0);
+  ledcWrite(2, rf ? speedLevels[currentSpeedIndex] : 0);
+  ledcWrite(3, rb ? speedLevels[currentSpeedIndex] : 0);
 }
 
 void loop() {
-  if (LoRa.parsePacket() != 3) return;
+  int packetSize = LoRa.parsePacket();
+  if (!packetSize) return;
 
-  byte id     = LoRa.read();
-  byte encCmd = LoRa.read();
-  byte encChk = LoRa.read();
+  if (packetSize != 5) return; // 3 byte + 2 byte CRC
 
-  if (id != MY_ROBOT_ID) return;
+  byte pkt[5];
+  for (int i = 0; i < 5; i++) pkt[i] = LoRa.read();
 
-  byte cmd = encCmd ^ SECRET_KEY;
-  byte chk = encChk ^ SECRET_KEY;
+  uint16_t receivedCrc = (pkt[3] << 8) | pkt[4];
+  uint16_t calcCrc = CRC16.ccitt(pkt, 3);
 
-  if (chk != calcChecksum(MY_ROBOT_ID, cmd)) {
-    Serial.println("❌ BAD CHECKSUM - IGNORED");
+  if (receivedCrc != calcCrc) {
+    Serial.println("CRC FAIL!");
     return;
   }
 
-  // ======== SPEED TOGGLE ========
-  bool speedBtn = cmd & 0b00010000;
+  if (pkt[0] != ROBOT_ID) return; // csak saját ID
 
+  byte cmd = pkt[1];
+  bool speedBtn = pkt[2];
+
+  // sebesség váltás, csak a gomb lenyomásának éle
   if (speedBtn && !lastSpeedButton) {
-    speedIndex = (speedIndex + 1) % 3;
-    motorSpeed = speeds[speedIndex];
-
-    Serial.print("⚡ SPEED → ");
-    Serial.println(motorSpeed);
+    currentSpeedIndex = (currentSpeedIndex + 1) % 2;
+    Serial.printf("Speed changed → %d\n", speedLevels[currentSpeedIndex]);
   }
   lastSpeedButton = speedBtn;
 
-  // ===== MOVE =====
   drive(
-    cmd & 0b00000001,  // LF
-    cmd & 0b00000010,  // LB
-    cmd & 0b00000100,  // RF
-    cmd & 0b00001000   // RB
+    cmd & 0b00000001,
+    cmd & 0b00000010,
+    cmd & 0b00000100,
+    cmd & 0b00001000
   );
-}
-
-void drive(bool LF, bool LB, bool RF, bool RB) {
-  ledcWrite(0, LF ? motorSpeed : 0);
-  ledcWrite(1, LB ? motorSpeed : 0);
-  ledcWrite(2, RF ? motorSpeed : 0);
-  ledcWrite(3, RB ? motorSpeed : 0);
 }
