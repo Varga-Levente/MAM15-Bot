@@ -2,8 +2,8 @@
 #include <LoRa.h>
 
 // ---- CRC beállítások ----
-uint16_t CRC_SEED   = 0x1D0F;      // Kezdő érték (seed)
-uint16_t CRC_POLY   = 0x1021;      // Polinom (CCITT alapértelmezett)
+uint16_t CRC_POLY = 0x1021;
+uint16_t CRC_SEED = 0xFFFF;
 
 // ---- Lora beállítások ----
 #define LORA_SCK 18
