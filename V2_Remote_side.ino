@@ -1,87 +1,119 @@
 #include <SPI.h>
 #include <LoRa.h>
+#include <CRC.h>  // Rob Tillaart CRC könyvtár
 
-// ---- CRC beállítások ----
-uint16_t CRC_POLY = 0x1021;
-uint16_t CRC_SEED = 0xFFFF;
+// ===== LoRa kommunikációs beállítások =====
+#define LORA_SCK_PIN 18
+#define LORA_MISO_PIN 19
+#define LORA_MOSI_PIN 23
+#define LORA_SS_PIN 5
+#define LORA_RESET_PIN 14
+#define LORA_DIO0_PIN 2
+#define LORA_FREQUENCY 433E6  // 433 MHz-es sáv
 
-// ---- Lora beállítások ----
-#define LORA_SCK 18
-#define LORA_MISO 19
-#define LORA_MOSI 23
-#define LORA_SS 5
-#define LORA_RST 14
-#define LORA_DIO0 2
-#define LORA_BAND 433E6
+// ===== Cél robot azonosítója =====
+#define TARGET_ROBOT_ID 69
 
-#define ROBOT_ID 69
+// ===== CRC ellenőrzés beállításai =====
+#define CRC_POLYNOMIAL 0x1021
+#define CRC_INITIAL_VALUE 0xFFFF
 
-// ---- Gombok ----
-#define BTN_FWD 32
-#define BTN_BACK 33
-#define BTN_LEFT 25
-#define BTN_RIGHT 26
-#define BTN_SPEED 27
+// ===== Irányító gombok pin definíciói =====
+#define FORWARD_BUTTON_PIN 32
+#define BACKWARD_BUTTON_PIN 33  
+#define RIGHT_BUTTON_PIN 25
+#define LEFT_BUTTON_PIN 26
+#define SPEED_CHANGE_BUTTON_PIN 27
 
-bool lastSpeedBtn = false;
-bool speedFlag = false;
+// ===== Gomb állapot változók =====
+bool previousSpeedButtonState = false;  // Előző sebesség gomb állapot
+bool speedChangeFlag = false;           // Sebesség váltás jelző
 
-// ==== CRC számoló ====
-uint16_t calcCRC(uint8_t *data, uint8_t len) {
-  uint16_t crc = CRC_SEED;
+// ===== CRC számoló objektum =====
+CRC16 crcCalculator(CRC_POLYNOMIAL, CRC_INITIAL_VALUE, 0x0000, 0x0000, true, true);
 
-  for (uint8_t i = 0; i < len; i++) {
-    crc ^= (uint16_t)data[i] << 8;
-    for (uint8_t j = 0; j < 8; j++)
-      crc = (crc & 0x8000) ? (crc << 1) ^ CRC_POLY : (crc << 1);
-  }
-
-  return crc;
-}
-
+// =============================== ALAPBEÁLLÍTÁS =================================
 void setup() {
   Serial.begin(115200);
+  Serial.println("🎮 Távirányító indítása...");
 
-  pinMode(BTN_FWD, INPUT_PULLUP);
-  pinMode(BTN_BACK, INPUT_PULLUP);
-  pinMode(BTN_LEFT, INPUT_PULLUP);
-  pinMode(BTN_RIGHT, INPUT_PULLUP);
-  pinMode(BTN_SPEED, INPUT_PULLUP);
+  // ===== Gomb bemenetek beállítása =====
+  // Minden gomb bemenet felhúzó ellenállással (INPUT_PULLUP)
+  pinMode(FORWARD_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(BACKWARD_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(RIGHT_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(LEFT_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(SPEED_CHANGE_BUTTON_PIN, INPUT_PULLUP);
 
-  LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
-  LoRa.begin(LORA_BAND);
-  Serial.println("TX Ready");
+  // ===== LoRa kommunikáció inicializálása =====
+  LoRa.setPins(LORA_SS_PIN, LORA_RESET_PIN, LORA_DIO0_PIN);
+  
+  if (!LoRa.begin(LORA_FREQUENCY)) {
+    Serial.println("❌ Hiba: LoRa inicializálás sikertelen!");
+    while (1) {
+      delay(1000);
+    }
+  }
+
+  Serial.println("✅ Távirányító készen áll - LoRa adó módban...");
 }
 
+// =============================== FŰ PROGRAMHURK =================================
 void loop() {
-  byte cmd = 0;
+  byte motorCommandByte = 0; // Motor parancsok bitmezője
 
-  if (!digitalRead(BTN_FWD))  cmd |= 0b00000001;
-  if (!digitalRead(BTN_BACK)) cmd |= 0b00000010;
-  if (!digitalRead(BTN_RIGHT)) cmd |= 0b00000100;
-  if (!digitalRead(BTN_LEFT))  cmd |= 0b00001000;
+  // ===== GOMB ÁLLAPOTOK BEOLVASÁSA ÉS PARANCCÁ ALAKÍTÁSA =====
+  // Minden gomb aktív alacsony (LOW), mert PULLUP bemenetek
+  
+  // Előre gomb - Bal motor előre (bit 0)
+  if (!digitalRead(FORWARD_BUTTON_PIN)) {
+    motorCommandByte |= 0b00000001;
+  }
+  
+  // Hátra gomb - Bal motor hátra (bit 1)  
+  if (!digitalRead(BACKWARD_BUTTON_PIN)) {
+    motorCommandByte |= 0b00000010;
+  }
+  
+  // Jobbra gomb - Jobb motor előre (bit 2)
+  if (!digitalRead(RIGHT_BUTTON_PIN)) {
+    motorCommandByte |= 0b00000100;
+  }
+  
+  // Balra gomb - Jobb motor hátra (bit 3)
+  if (!digitalRead(LEFT_BUTTON_PIN)) {
+    motorCommandByte |= 0b00001000;
+  }
 
-  bool speedBtn = !digitalRead(BTN_SPEED);
+  // ===== SEBESSÉG VÁLTÓ GOMB KEZELÉSE =====
+  bool currentSpeedButtonState = !digitalRead(SPEED_CHANGE_BUTTON_PIN);
+  
+  // Rising edge észlelés - csak a gomb lenyomásának elején
+  if (currentSpeedButtonState && !previousSpeedButtonState) {
+    speedChangeFlag = true;
+  } else {
+    speedChangeFlag = false;
+  }
+  previousSpeedButtonState = currentSpeedButtonState;
 
-  if (speedBtn && !lastSpeedBtn)
-    speedFlag = true;
-  else
-    speedFlag = false;
+  // ===== ADAT CSOMAG ÖSSZEÁLLÍTÁSA =====
+  uint8_t transmitPacket[3];
+  transmitPacket[0] = TARGET_ROBOT_ID;    // Cél robot ID
+  transmitPacket[1] = motorCommandByte;   // Motor parancsok
+  transmitPacket[2] = speedChangeFlag;    // Sebesség váltás jelző
 
-  lastSpeedBtn = speedBtn;
+  // ===== CRC SZÁMÍTÁSA =====
+  crcCalculator.restart(); // CRC számoló alapállapotba
+  crcCalculator.add(transmitPacket, 3); // Mind a 3 bájt hozzáadása
+  uint16_t packetCRC = crcCalculator.getCRC(); // CRC kiszámítása
 
-  uint8_t pkt[3];
-  pkt[0] = ROBOT_ID;
-  pkt[1] = cmd;
-  pkt[2] = speedFlag;
-
-  uint16_t crc = calcCRC(pkt, 3);
-
+  // ===== LoRa CSOMAG KÜLDÉSE =====
   LoRa.beginPacket();
-  LoRa.write(pkt, 3);
-  LoRa.write(crc >> 8);
-  LoRa.write(crc & 0xFF);
+  LoRa.write(transmitPacket, 3);        // 3 bájt adat
+  LoRa.write(packetCRC >> 8);           // CRC magas byte
+  LoRa.write(packetCRC & 0xFF);         // CRC alacsony byte
   LoRa.endPacket();
 
-  delay(60);
+  // ===== RÖVID KÉSLELTETÉS A KÖVETKEZŐ KÜLDÉS ELŐTT =====
+  delay(60); // 60 ms késleltetés a következő csomag küldése előtt
 }
