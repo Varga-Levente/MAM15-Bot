@@ -30,7 +30,7 @@
 #define PWM_RESOLUTION 8      // 8 bites PWM felbontás (0-255)
 
 // ===== Sebesség szintek =====
-int motorSpeedLevels[2] = {120, 255};  // Alacsony és maximális sebesség
+int motorSpeedLevels[3] = {255, 120, 60};  // Alacsony és maximális sebesség
 int currentSpeedLevelIndex = 0;        // Jelenlegi sebesség szint indexe
 bool previousSpeedButtonState = false; // Előző sebesség gomb állapota
 
@@ -218,7 +218,7 @@ void loop() {
   if (speedButtonPressed && !previousSpeedButtonState) {
     currentSpeedLevelIndex = (currentSpeedLevelIndex + 1) % 2;
     Serial.printf("⚡ Sebesség váltás: %d → %d\n", 
-                  motorSpeedLevels[(currentSpeedLevelIndex + 1) % 2], 
+                  motorSpeedLevels[(currentSpeedLevelIndex + 1) % 3], 
                   motorSpeedLevels[currentSpeedLevelIndex]);
   }
   previousSpeedButtonState = speedButtonPressed;
