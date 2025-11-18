@@ -30,8 +30,13 @@
 #endif
 
 // ================= HOTSPOT =================
-const char* ap_ssid = "ESP32-CAM-HOTSPOT";
-const char* ap_password = "12345678";
+const char* ap_ssid = "We Are Engineers";
+const char* ap_password = "12341234";
+
+// === LED BLINK SETTINGS ===
+int LED_PIN = 4;          // ESP32-CAM beépített vakuvillogó LED (GPIO 4)
+int BLINK_BAUD = 25;     // 300 (Ez kell versenyen) 10-15 (Szemmel is olvasható)
+unsigned long bitDelay = 1000000UL / BLINK_BAUD;  // microseconds
 
 // ================= CODES STORAGE =================
 Preferences preferences;
@@ -70,6 +75,34 @@ void saveCodes() {
   preferences.end();
 }
 
+void blinkCode(String code) {
+  if (code.length() != 3) return;
+
+  pinMode(LED_PIN, OUTPUT);
+
+  for (int i = 0; i < code.length(); i++) {
+    char c = code[i];
+
+    // START BIT (LOW)
+    digitalWrite(LED_PIN, LOW);
+    delayMicroseconds(bitDelay);
+
+    // 8 DATA BIT LSB FIRST
+    for (int b = 0; b < 8; b++) {
+      bool bit = (c >> b) & 1;
+      digitalWrite(LED_PIN, bit ? HIGH : LOW);
+      delayMicroseconds(bitDelay);
+    }
+
+    // STOP BIT (HIGH)
+    digitalWrite(LED_PIN, HIGH);
+    delayMicroseconds(bitDelay);
+  }
+
+  // LED OFF
+  digitalWrite(LED_PIN, LOW);
+}
+
 String codesPage() {
   String html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Kódok kezelése</title></head><body>";
   html += "<h2>Kód hozzáadása (max 4 db)</h2>";
@@ -78,15 +111,33 @@ String codesPage() {
   html += "<input type='submit' value='Mentés'></form>";
 
   html += "<h3>Mentett kódok</h3><ul style='list-style:none;padding-left:0;'>";
+
   for(int i=0; i < max_codes; i++) {
     if(codes[i].length() == 3) {
       html += "<li style='margin:4px 0;'><b>" + codes[i] + "</b>";
-      if(activeCode==i) html += " <span style='color:green;'>(Aktív)</span>";
-      else html += " <form style='display:inline' method='POST' action='/activate'><input type='hidden' name='id' value='"+String(i)+"'><input type='submit' value='Aktivál'></form>";
-      html += " <form style='display:inline' method='POST' action='/delete'><input type='hidden' name='id' value='"+String(i)+"'><input type='submit' value='Törlés'></form>";
+
+      if(activeCode == i){
+        // Aktív kód jelzése és TESZT gomb
+        html += " <span style='color:green;'>(Aktív)</span>";
+        html += " <form style='display:inline' method='POST' action='/blink'><input type='submit' value='TESZT'></form>";
+      } else {
+        // Nem aktív kód: Aktiválás gomb
+        html += " <form style='display:inline' method='POST' action='/activate'>";
+        html += "  <input type='hidden' name='id' value='"+String(i)+"'>";
+        html += "  <input type='submit' value='Aktivál'>";
+        html += "</form>";
+      }
+
+      // Törlés gomb minden kódnál
+      html += " <form style='display:inline' method='POST' action='/delete'>";
+      html += "  <input type='hidden' name='id' value='"+String(i)+"'>";
+      html += "  <input type='submit' value='Törlés'>";
+      html += "</form>";
+
       html += "</li>";
     }
   }
+
   html += "</ul></body></html>";
   return html;
 }
@@ -144,30 +195,43 @@ static void handleCodes(httpd_req_t *req){
     String html = codesPage();
     httpd_resp_set_type(req, "text/html");
     httpd_resp_send(req, html.c_str(), html.length());
-  } else if(req->method == HTTP_POST){
-    char buf[16];
-    size_t len = httpd_req_get_url_query_len(req);
-    if(len > 0) len = (len<15)?len:15;
-    httpd_req_get_url_query_str(req, buf, len+1);
+  }else if(req->method == HTTP_POST){
+    char body[32];
+    int len = httpd_req_recv(req, body, sizeof(body)-1);
+    if(len > 0){
+      body[len] = 0;
+      String arg = body;
 
-    String arg = buf;
-    int idx = arg.indexOf("newcode=");
-    if(idx >=0){
-      String newCode = arg.substring(idx+8);
-      newCode.trim();
-      if(newCode.length()==3){
-        bool exists = false;
-        for(int i=0;i<max_codes;i++) if(codes[i]==newCode) exists=true;
-        if(!exists){
-          int freeIdx=-1;
-          for(int i=0;i<max_codes;i++){ if(codes[i].length()!=3){ freeIdx=i; break;}}
-          if(freeIdx>=0){
-            codes[freeIdx]=newCode;
-            saveCodes();
+      int idx = arg.indexOf("newcode=");
+      if(idx >= 0){
+        String newCode = arg.substring(idx + 8);
+        newCode.trim();
+
+        if(newCode.length() == 3){
+          bool exists = false;
+          for(int i=0;i<max_codes;i++) if(codes[i] == newCode) exists = true;
+
+          if(!exists){
+            int freeIdx = -1;
+            for(int i=0;i<max_codes;i++){
+              if(codes[i].length() != 3){
+                freeIdx = i;
+                break;
+              }
+            }
+
+            if(freeIdx >= 0){
+              codes[freeIdx] = newCode;
+              saveCodes();
+              Serial.println("Új kód mentve: " + newCode);
+            } else {
+              Serial.println("⚠ Tele a kódtár");
+            }
           }
         }
       }
     }
+
     httpd_resp_set_status(req, "303 See Other");
     httpd_resp_set_hdr(req, "Location", "/codes");
     httpd_resp_send(req, NULL, 0);
@@ -175,26 +239,61 @@ static void handleCodes(httpd_req_t *req){
 }
 
 static void handleActivate(httpd_req_t *req){
-  char buf[8];
-  httpd_req_get_url_query_str(req, buf, 8);
-  int id = atoi(buf);
-  if(id>=0 && id<max_codes && codes[id].length()==3){
-    activeCode = id;
-    saveCodes();
+  char body[32];
+  int len = httpd_req_recv(req, body, sizeof(body)-1);
+
+  if(len > 0){
+    body[len] = 0;
+    String arg = body;
+
+    int idx = arg.indexOf("id=");
+    if(idx >= 0){
+      int id = arg.substring(idx+3).toInt();
+
+      if(id >= 0 && id < max_codes && codes[id].length() == 3){
+        activeCode = id;
+
+        preferences.begin("codeStore", false);
+        preferences.putInt("active", activeCode);
+        preferences.end();
+
+        Serial.printf("➡ Aktív kód átállítva: %s (index: %d)\n", codes[id].c_str(), id);
+      }
+    }
   }
+
   httpd_resp_set_status(req, "303 See Other");
   httpd_resp_set_hdr(req, "Location", "/codes");
   httpd_resp_send(req, NULL, 0);
 }
 
 static void handleDelete(httpd_req_t *req){
-  char buf[8];
-  httpd_req_get_url_query_str(req, buf, 8);
-  int id = atoi(buf);
-  if(id>=0 && id<max_codes && codes[id].length()==3){
-    codes[id]="";
-    if(activeCode==id) activeCode=-1;
-    saveCodes();
+  char buf[16];
+  int len = httpd_req_recv(req, buf, sizeof(buf)-1);
+  if(len > 0){
+    buf[len] = 0;
+    String arg = buf;
+
+    int idx = arg.indexOf("id=");
+    if(idx >= 0){
+      int id = arg.substring(idx+3).toInt();
+      if(id >= 0 && id < max_codes){
+        codes[id] = "";           // törlés
+        if(activeCode == id) activeCode = -1;  // ha aktív volt, inaktiváljuk
+        saveCodes();
+        Serial.printf("Törölve: index %d\n", id);
+      }
+    }
+  }
+
+  httpd_resp_set_status(req, "303 See Other");
+  httpd_resp_set_hdr(req, "Location", "/codes");
+  httpd_resp_send(req, NULL, 0);
+}
+
+static void handleBlink(httpd_req_t *req){
+  if (activeCode >= 0 && activeCode < max_codes) {
+    blinkCode(codes[activeCode]);
   }
   httpd_resp_set_status(req, "303 See Other");
   httpd_resp_set_hdr(req, "Location", "/codes");
@@ -276,6 +375,17 @@ void startCameraServer() {
             .user_ctx = NULL
         };
         httpd_register_uri_handler(code_httpd, &delete_uri);
+
+        httpd_uri_t blink_uri = {
+          .uri      = "/blink",
+          .method   = HTTP_POST,
+          .handler  = [](httpd_req_t* req) -> esp_err_t {
+              handleBlink(req);
+              return ESP_OK;
+          },
+          .user_ctx = NULL
+        };
+        httpd_register_uri_handler(code_httpd, &blink_uri);
 
     } else {
         Serial.println("Code server indítása sikertelen!");
