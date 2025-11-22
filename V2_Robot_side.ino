@@ -51,20 +51,30 @@ CRC16 crcCalculator(CRC_POLYNOMIAL, CRC_INITIAL_VALUE, CRC_FINAL_XOR_VALUE, true
 
 // ===== LoRa újrainicializáló függvény =====
 void checkLoRa() {
-  // Ha már inicializált, nincs teendő
-  if (loraInitialized) return;
+  // Ha már inicializált, ellenőrizzük, hogy működik-e
+  if (loraInitialized) {
+    // Próbáljunk egy üres LoRa műveletet, hogy lássuk, él-e a modul
+    int packet = LoRa.parsePacket();
+    if (packet >= 0 || packet == 0) {
+      // modul elérhető, minden ok
+      return;
+    } else {
+      // modul elveszett
+      loraInitialized = false;
+      if (DEBUG) Serial.println("⚠️ LoRa modul elveszett! Újrainicializálás...");
+    }
+  }
 
-  // Csak 1 mp-enként próbálkozzon
-  if (millis() - lastLoRaAttemptTime < LORA_RETRY_INTERVAL) return;
-  lastLoRaAttemptTime = millis();
+  // Ha nincs inicializálva, csak 1 mp-enként próbálkozzon
+  if (!loraInitialized && millis() - lastLoRaAttemptTime >= LORA_RETRY_INTERVAL) {
+    lastLoRaAttemptTime = millis();
 
-  // Próbáljuk inicializálni
-  if (LoRa.begin(LORA_FREQUENCY)) {
-    loraInitialized = true;
-    if (DEBUG) Serial.println("✅ LoRa modul újrainicializálva");
-  } else {
-    loraInitialized = false;
-    if (DEBUG) Serial.println("⚠️ LoRa modul nem elérhető, újrapróbálkozás 1 mp múlva...");
+    if (LoRa.begin(LORA_FREQUENCY)) {
+      loraInitialized = true;
+      if (DEBUG) Serial.println("✅ LoRa modul újrainicializálva!");
+    } else {
+      if (DEBUG) Serial.println("⚠️ LoRa modul újrapróbálkozás 1 mp múlva...");
+    }
   }
 }
 
@@ -205,10 +215,9 @@ void loop() {
   // Non-blocking LoRa ellenőrzés / újrainicializálás
   checkLoRa();
 
-  // Ha nincs inicializálva, ne próbáljunk LoRa csomagot feldolgozni
+  // Ha nincs LoRa, ne próbáljunk csomagfeldolgozni
   if (!loraInitialized) {
-    // A robot többi része tovább működhet
-    stopAllMotors(); // opcionális: biztonsági megállítás, ha nincs LoRa
+    // A robot többi része (motorok, failsafe) tovább működik
     return;
   }
 
