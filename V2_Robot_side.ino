@@ -37,12 +37,33 @@ int motorSpeedLevels[3] = {255, 120, 60};  // Sebesség szintek
 int currentSpeedLevelIndex = 0;        // Jelenlegi sebesség szint indexe
 bool previousSpeedButtonState = false; // Előző sebesség gomb állapota
 
+// ===== LoRa ReInit =====
+const int maxRetries = 5;
+
 // ===== Biztonsági beállítások (Failsafe) =====
 unsigned long lastReceivedPacketTime = 0;        // Utolsó csomag érkezésének ideje
 const unsigned long FAILSAFE_TIMEOUT_MS = 300;   // 300 ms után leállítja a motort
 
 // ===== CRC számoló objektum =====
 CRC16 crcCalculator(CRC_POLYNOMIAL, CRC_INITIAL_VALUE, CRC_FINAL_XOR_VALUE, true, true);
+
+// ===== LoRa újrainicializáló függvény =====
+bool ensureLoRaInitialized() {
+  int retries = 0;
+  while (!LoRa.begin(LORA_FREQUENCY) && retries < maxRetries) {
+    if (DEBUG) Serial.println("⚠️ LoRa modul nem elérhető, újrapróbálkozás...");
+    retries++;
+    delay(500);
+  }
+
+  if (retries == maxRetries) {
+    if (DEBUG) Serial.println("❌ LoRa modul újrainicializálás sikertelen!");
+    return false;
+  }
+
+  if (DEBUG) Serial.println("✅ LoRa újrainicializálva");
+  return true;
+}
 
 // =============================== ALAPBEÁLLÍTÁS =================================
 void setup() {
@@ -178,6 +199,13 @@ bool validateCommand(byte command) {
 
 // =============================== FŰ PROGRAMHURK =================================
 void loop() {
+  // Ellenőrizzük, hogy a LoRa aktív-e
+  if (LoRa.parsePacket() == 0 && !ensureLoRaInitialized()) {
+    // Ha nem tudjuk újrainicializálni, várunk egy kicsit
+    delay(500);
+    return;
+  }
+
   // ===== BIZTONSÁGI LEÁLLÍTÁS (Failsafe) =====
   if (millis() - lastReceivedPacketTime > FAILSAFE_TIMEOUT_MS) {
     stopAllMotors();
