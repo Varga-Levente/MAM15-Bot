@@ -33,15 +33,8 @@ const bool DEBUG = true;  // true = Serial kiírás engedélyezve, false = nincs
 bool previousSpeedButtonState = false;  // Előző sebesség gomb állapot
 bool speedChangeFlag = false;           // Sebesség váltás jelző
 
-// ===== DEBOUNCE BEÁLLÍTÁSOK =====
-unsigned long lastDebounceTime = 0;
-const unsigned long DEBOUNCE_DELAY = 50;  // 50 ms debounce idő
-
-// ===== KÜLDÉSI BEÁLLÍTÁSOK =====
-unsigned long lastSendTime = 0;
-const unsigned long SEND_INTERVAL = 30;  // 30 ms küldési intervallum (33 Hz)
-
-// ===== CRC számoló objektum =====
+// ===== CRC számoló objektum - JAVÍTOTT KONSTRUKTOR =====
+// Paraméterek: polynomial, initial, xorOut, reverseIn, reverseOut
 CRC16 crcCalculator(CRC_POLYNOMIAL, CRC_INITIAL_VALUE, CRC_FINAL_XOR_VALUE, true, true);
 
 // =============================== ALAPBEÁLLÍTÁS =================================
@@ -52,6 +45,7 @@ void setup() {
   }
 
   // ===== Gomb bemenetek beállítása =====
+  // Minden gomb bemenet felhúzó ellenállással (INPUT_PULLUP)
   pinMode(FORWARD_BUTTON_PIN, INPUT_PULLUP);
   pinMode(BACKWARD_BUTTON_PIN, INPUT_PULLUP);
   pinMode(RIGHT_BUTTON_PIN, INPUT_PULLUP);
@@ -68,96 +62,46 @@ void setup() {
     }
   }
 
-  // ===== LoRa BEÁLLÍTÁSOK OPTIMALIZÁLÁSA =====
-  LoRa.setTxPower(20);  // Max teljesítmény (20 dBm)
-  LoRa.setSpreadingFactor(7);  // Alacsony spreading factor gyorsabb átvitelhez
-  LoRa.setSignalBandwidth(125E3);  // Szabvány sávszélesség
-  
   if (DEBUG) Serial.println("✅ Távirányító készen áll - LoRa adó módban...");
-}
-
-/**
- * Debounce-olással ellátott gomb állapot olvasás
- */
-bool readDebouncedButton(int pin) {
-  static bool lastStableState[6] = {false}; // Minden pinhez tároljuk az állapotot
-  static unsigned long lastDebounceTimes[6] = {0};
-  
-  bool currentState = !digitalRead(pin); // Aktív alacsony, ezért invertáljuk
-  int pinIndex = pin - 25; // Pin index számítás (25-33 közöttiek)
-  
-  if (currentState != lastStableState[pinIndex]) {
-    lastDebounceTimes[pinIndex] = millis();
-  }
-  
-  if ((millis() - lastDebounceTimes[pinIndex]) > DEBOUNCE_DELAY) {
-    if (currentState != lastStableState[pinIndex]) {
-      lastStableState[pinIndex] = currentState;
-    }
-  }
-  
-  return lastStableState[pinIndex];
 }
 
 // =============================== FŰ PROGRAMHURK =================================
 void loop() {
-  unsigned long currentTime = millis();
-  
-  // ===== IDŐZÍTETT KÜLDÉS =====
-  if (currentTime - lastSendTime < SEND_INTERVAL) {
-    return; // Várunk a következő küldési intervallumig
-  }
-  lastSendTime = currentTime;
-
   byte motorCommandByte = 0; // Motor parancsok bitmezője
 
-  // ===== GOMB ÁLLAPOTOK BEOLVASÁSA DEBOUNCE-OLVA =====
+  // ===== GOMB ÁLLAPOTOK BEOLVASÁSA ÉS PARANCCSÁ ALAKÍTÁSA =====
+  // Minden gomb aktív alacsony (LOW), mert PULLUP bemenetek
+  
   // Előre gomb - Bal motor előre (bit 0)
-  if (readDebouncedButton(FORWARD_BUTTON_PIN)) {
+  if (!digitalRead(FORWARD_BUTTON_PIN)) {
     motorCommandByte |= 0b00000001;
   }
   
   // Hátra gomb - Bal motor hátra (bit 1)  
-  if (readDebouncedButton(BACKWARD_BUTTON_PIN)) {
+  if (!digitalRead(BACKWARD_BUTTON_PIN)) {
     motorCommandByte |= 0b00000010;
   }
   
   // Jobbra gomb - Jobb motor előre (bit 2)
-  if (readDebouncedButton(RIGHT_BUTTON_PIN)) {
+  if (!digitalRead(RIGHT_BUTTON_PIN)) {
     motorCommandByte |= 0b00000100;
   }
   
   // Balra gomb - Jobb motor hátra (bit 3)
-  if (readDebouncedButton(LEFT_BUTTON_PIN)) {
+  if (!digitalRead(LEFT_BUTTON_PIN)) {
     motorCommandByte |= 0b00001000;
   }
 
-  // ===== SEBESSÉG VÁLTÓ GOMB KEZELÉSE DEBOUNCE-OLVA =====
-  bool currentSpeedButtonState = readDebouncedButton(SPEED_CHANGE_BUTTON_PIN);
+  // ===== SEBESSÉG VÁLTÓ GOMB KEZELÉSE =====
+  bool currentSpeedButtonState = !digitalRead(SPEED_CHANGE_BUTTON_PIN);
   
   // Rising edge észlelés - csak a gomb lenyomásának elején
   if (currentSpeedButtonState && !previousSpeedButtonState) {
     speedChangeFlag = true;
-    if (DEBUG) Serial.println("⚡ Sebesség váltás kérése");
   } else {
     speedChangeFlag = false;
   }
   previousSpeedButtonState = currentSpeedButtonState;
-
-  // ===== DEBUG INFORMÁCIÓ =====
-  if (DEBUG) {
-    static byte lastMotorCommand = 0;
-    if (motorCommandByte != lastMotorCommand) {
-      Serial.printf("🎮 Motor parancs: 0x%02X - ", motorCommandByte);
-      if (motorCommandByte & 0b0001) Serial.print("ELŐRE ");
-      if (motorCommandByte & 0b0010) Serial.print("HÁTRA ");
-      if (motorCommandByte & 0b0100) Serial.print("JOBBRA ");
-      if (motorCommandByte & 0b1000) Serial.print("BALRA ");
-      if (motorCommandByte == 0) Serial.print("STOP");
-      Serial.println();
-      lastMotorCommand = motorCommandByte;
-    }
-  }
 
   // ===== ADAT CSOMAG ÖSSZEÁLLÍTÁSA =====
   uint8_t transmitPacket[3];
@@ -166,26 +110,17 @@ void loop() {
   transmitPacket[2] = speedChangeFlag;    // Sebesség váltás jelző
 
   // ===== CRC SZÁMÍTÁSA =====
-  crcCalculator.restart();
-  crcCalculator.add(transmitPacket, 3);
-  uint16_t packetCRC = crcCalculator.getCRC();
+  crcCalculator.restart(); // CRC számoló alapállapotba
+  crcCalculator.add(transmitPacket, 3); // Mind a 3 bájt hozzáadása
+  uint16_t packetCRC = crcCalculator.getCRC(); // CRC kiszámítása
 
   // ===== LoRa CSOMAG KÜLDÉSE =====
   LoRa.beginPacket();
   LoRa.write(transmitPacket, 3);        // 3 bájt adat
   LoRa.write(packetCRC >> 8);           // CRC magas byte
   LoRa.write(packetCRC & 0xFF);         // CRC alacsony byte
-  
-  if (LoRa.endPacket()) {
-    // Sikeres küldés
-    if (DEBUG) {
-      static unsigned long packetCount = 0;
-      packetCount++;
-      if (packetCount % 50 == 0) { // Minden 50. csomagnál
-        Serial.printf("📡 %lu csomag sikeresen elküldve\n", packetCount);
-      }
-    }
-  } else {
-    if (DEBUG) Serial.println("❌ Küldési hiba!");
-  }
+  LoRa.endPacket();
+
+  // ===== RÖVID KÉSLELTETÉS A KÖVETKEZŐ KÜLDÉS ELŐTT =====
+  delay(60); // 60 ms késleltetés a következő csomag küldése előtt
 }
