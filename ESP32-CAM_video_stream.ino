@@ -34,7 +34,7 @@ const char* ap_ssid = "We Are Engineers";
 const char* ap_password = "12341234";
 
 // === LED BLINK SETTINGS ===
-int LED_PIN = 4;          // ESP32-CAM beépített vakuvillogó LED (GPIO 4)
+int LED_PIN = 13;          // ESP32-CAM beépített vakuvillogó LED (GPIO 4)
 int BLINK_BAUD = 25;     // 300 (Ez kell versenyen) 10-15 (Szemmel is olvasható)
 unsigned long bitDelay = 1000000UL / BLINK_BAUD;  // microseconds
 
@@ -450,3 +450,4 @@ void setup() {
 void loop() {
   // nothing, HTTP server handles everything
 }
+
