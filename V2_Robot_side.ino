@@ -63,6 +63,7 @@ void checkLoRa() {
     loraInitialized = true;
     if (DEBUG) Serial.println("✅ LoRa modul újrainicializálva");
   } else {
+    loraInitialized = false;
     if (DEBUG) Serial.println("⚠️ LoRa modul nem elérhető, újrapróbálkozás 1 mp múlva...");
   }
 }
