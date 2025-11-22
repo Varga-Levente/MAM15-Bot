@@ -149,54 +149,96 @@ static esp_err_t stream_handler(httpd_req_t *req){
   size_t _jpg_buf_len = 0;
   uint8_t * _jpg_buf = NULL;
   char part_buf[64];
+  static int failCount = 0;  // ha egymás után több capture fails
 
   httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
 
   while(true){
-    // ellenőrizzük a kliens socketet
-    int sock = httpd_req_to_sockfd(req);
-    if(sock < 0){
-        Serial.println("Client disconnected.");
-        break; // kilépünk a loopból
-    }
+      // Ellenőrizzük, hogy a kliens még csatlakoztatva van
+      int sock = httpd_req_to_sockfd(req);
+      if(sock < 0){
+          Serial.println("Client disconnected.");
+          break; // kilépünk a loopból
+      }
 
-    fb = esp_camera_fb_get();
-    if(!fb){
-        Serial.println("Camera capture failed");
-        delay(10);
-        continue;
-    }
+      // Kamera frame lekérése
+      fb = esp_camera_fb_get();
+      if(!fb){
+          failCount++;
+          Serial.println("Camera capture failed");
+          delay(10);  // kis várakozás
+          if(failCount > 3){
+              Serial.println("⚠ Többszörös capture fail, újra inicializáljuk a kamerát...");
+              esp_camera_deinit();
+              camera_config_t config;  // ugyanaz a config, mint setup-ban
+              config.ledc_channel = LEDC_CHANNEL_0;
+              config.ledc_timer = LEDC_TIMER_0;
+              config.pin_d0 = Y2_GPIO_NUM;
+              config.pin_d1 = Y3_GPIO_NUM;
+              config.pin_d2 = Y4_GPIO_NUM;
+              config.pin_d3 = Y5_GPIO_NUM;
+              config.pin_d4 = Y6_GPIO_NUM;
+              config.pin_d5 = Y7_GPIO_NUM;
+              config.pin_d6 = Y8_GPIO_NUM;
+              config.pin_d7 = Y9_GPIO_NUM;
+              config.pin_xclk = XCLK_GPIO_NUM;
+              config.pin_pclk = PCLK_GPIO_NUM;
+              config.pin_vsync = VSYNC_GPIO_NUM;
+              config.pin_href = HREF_GPIO_NUM;
+              config.pin_sscb_sda = SIOD_GPIO_NUM;
+              config.pin_sscb_scl = SIOC_GPIO_NUM;
+              config.pin_pwdn = PWDN_GPIO_NUM;
+              config.pin_reset = RESET_GPIO_NUM;
+              config.xclk_freq_hz = 20000000;
+              config.pixel_format = PIXFORMAT_JPEG;
+              if(psramFound()){
+                  config.frame_size = FRAMESIZE_VGA;
+                  config.jpeg_quality = 10;
+                  config.fb_count = 2;
+              } else {
+                  config.frame_size = FRAMESIZE_SVGA;
+                  config.jpeg_quality = 12;
+                  config.fb_count = 1;
+              }
+              esp_camera_init(&config);
+              failCount = 0;
+          }
+          continue;
+      }
+      failCount = 0; // sikeres capture esetén reset
 
-    if(fb->format != PIXFORMAT_JPEG){
-        frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
-        esp_camera_fb_return(fb);
-        fb = NULL;
-        if(!_jpg_buf){
-            Serial.println("JPEG conversion failed");
-            delay(10);
-            continue;
-        }
-    } else {
-        _jpg_buf = fb->buf;
-        _jpg_buf_len = fb->len;
-    }
+      // JPEG konverzió, ha kell
+      if(fb->format != PIXFORMAT_JPEG){
+          if(!frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len)){
+              Serial.println("JPEG conversion failed");
+              esp_camera_fb_return(fb);
+              delay(10);
+              continue;
+          }
+          esp_camera_fb_return(fb);
+          fb = NULL;
+      } else {
+          _jpg_buf = fb->buf;
+          _jpg_buf_len = fb->len;
+      }
 
-    int hlen = snprintf(part_buf, sizeof(part_buf), _STREAM_PART, _jpg_buf_len);
-    if(httpd_resp_send_chunk(req, part_buf, hlen) != ESP_OK) break;
-    if(httpd_resp_send_chunk(req, (const char*)_jpg_buf, _jpg_buf_len) != ESP_OK) break;
-    if(httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY)) != ESP_OK) break;
+      // Küldés a kliensnek
+      int hlen = snprintf(part_buf, sizeof(part_buf), _STREAM_PART, _jpg_buf_len);
+      if(httpd_resp_send_chunk(req, part_buf, hlen) != ESP_OK) break;
+      if(httpd_resp_send_chunk(req, (const char*)_jpg_buf, _jpg_buf_len) != ESP_OK) break;
+      if(httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY)) != ESP_OK) break;
 
-    // buffer visszaadása
-    if(fb){
-        esp_camera_fb_return(fb);
-        fb = NULL;
-        _jpg_buf = NULL;
-    } else if(_jpg_buf){
-        free(_jpg_buf);
-        _jpg_buf = NULL;
-    }
+      // Frame visszaadása
+      if(fb){
+          esp_camera_fb_return(fb);
+          fb = NULL;
+          _jpg_buf = NULL;
+      } else if(_jpg_buf){
+          free(_jpg_buf);
+          _jpg_buf = NULL;
+      }
 
-    delay(1); // yield a WiFi stacknek
+      delay(2); // kis yield a WiFi stacknek
   }
 
   return ESP_OK;
@@ -434,11 +476,11 @@ void setup() {
 
   if(psramFound()){
     config.frame_size = FRAMESIZE_VGA;
-    config.jpeg_quality = 25;
+    config.jpeg_quality = 10;
     config.fb_count = 2;
   } else {
     config.frame_size = FRAMESIZE_SVGA;
-    config.jpeg_quality = 25;
+    config.jpeg_quality = 12;
     config.fb_count = 1;
   }
 
