@@ -153,40 +153,52 @@ static esp_err_t stream_handler(httpd_req_t *req){
   httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
 
   while(true){
+    // ellenőrizzük a kliens socketet
+    int sock = httpd_req_to_sockfd(req);
+    if(sock < 0){
+        Serial.println("Client disconnected.");
+        break; // kilépünk a loopból
+    }
+
     fb = esp_camera_fb_get();
     if(!fb){
-      Serial.println("Camera capture failed");
-      continue;
+        Serial.println("Camera capture failed");
+        delay(10);
+        continue;
     }
 
     if(fb->format != PIXFORMAT_JPEG){
-      frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
-      esp_camera_fb_return(fb);
-      fb = NULL;
-      if(!_jpg_buf){
-        Serial.println("JPEG conversion failed");
-        continue;
-      }
+        frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
+        esp_camera_fb_return(fb);
+        fb = NULL;
+        if(!_jpg_buf){
+            Serial.println("JPEG conversion failed");
+            delay(10);
+            continue;
+        }
     } else {
-      _jpg_buf = fb->buf;
-      _jpg_buf_len = fb->len;
+        _jpg_buf = fb->buf;
+        _jpg_buf_len = fb->len;
     }
 
     int hlen = snprintf(part_buf, sizeof(part_buf), _STREAM_PART, _jpg_buf_len);
-    httpd_resp_send_chunk(req, part_buf, hlen);
-    httpd_resp_send_chunk(req, (const char*)_jpg_buf, _jpg_buf_len);
-    httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
+    if(httpd_resp_send_chunk(req, part_buf, hlen) != ESP_OK) break;
+    if(httpd_resp_send_chunk(req, (const char*)_jpg_buf, _jpg_buf_len) != ESP_OK) break;
+    if(httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY)) != ESP_OK) break;
 
+    // buffer visszaadása
     if(fb){
-      esp_camera_fb_return(fb);
-      fb = NULL;
-      _jpg_buf = NULL;
+        esp_camera_fb_return(fb);
+        fb = NULL;
+        _jpg_buf = NULL;
     } else if(_jpg_buf){
-      free(_jpg_buf);
-      _jpg_buf = NULL;
+        free(_jpg_buf);
+        _jpg_buf = NULL;
     }
-    if(req->handle == NULL) break; // client disconnected
+
+    delay(1); // yield a WiFi stacknek
   }
+
   return ESP_OK;
 }
 
@@ -422,11 +434,11 @@ void setup() {
 
   if(psramFound()){
     config.frame_size = FRAMESIZE_VGA;
-    config.jpeg_quality = 10;
+    config.jpeg_quality = 25;
     config.fb_count = 2;
   } else {
     config.frame_size = FRAMESIZE_SVGA;
-    config.jpeg_quality = 12;
+    config.jpeg_quality = 25;
     config.fb_count = 1;
   }
 
@@ -450,4 +462,3 @@ void setup() {
 void loop() {
   // nothing, HTTP server handles everything
 }
-
