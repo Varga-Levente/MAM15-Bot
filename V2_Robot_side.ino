@@ -38,7 +38,7 @@ int currentSpeedLevelIndex = 0;        // Jelenlegi sebesség szint indexe
 bool previousSpeedButtonState = false; // Előző sebesség gomb állapota
 
 // ===== LoRa ReInit =====
-const int maxRetries = 5;
+bool loraInitialized = true; // LoRa állapot jelző
 
 // ===== Biztonsági beállítások (Failsafe) =====
 unsigned long lastReceivedPacketTime = 0;        // Utolsó csomag érkezésének ideje
@@ -48,21 +48,16 @@ const unsigned long FAILSAFE_TIMEOUT_MS = 300;   // 300 ms után leállítja a m
 CRC16 crcCalculator(CRC_POLYNOMIAL, CRC_INITIAL_VALUE, CRC_FINAL_XOR_VALUE, true, true);
 
 // ===== LoRa újrainicializáló függvény =====
-bool ensureLoRaInitialized() {
-  int retries = 0;
-  while (!LoRa.begin(LORA_FREQUENCY) && retries < maxRetries) {
-    if (DEBUG) Serial.println("⚠️ LoRa modul nem elérhető, újrapróbálkozás...");
-    retries++;
-    delay(500);
-  }
+void ensureLoRaInitialized() {
+    if (loraInitialized) return; // Ha már inicializált, nincs teendő
 
-  if (retries == maxRetries) {
-    if (DEBUG) Serial.println("❌ LoRa modul újrainicializálás sikertelen!");
-    return false;
-  }
-
-  if (DEBUG) Serial.println("✅ LoRa újrainicializálva");
-  return true;
+    if (LoRa.begin(LORA_FREQUENCY)) {
+        if (DEBUG) Serial.println("✅ LoRa újrainicializálva");
+        loraInitialized = true;
+    } else {
+        if (DEBUG) Serial.println("⚠️ LoRa modul nem elérhető, újrapróbálkozás...");
+        // Nem blokkolunk, visszatér a loop, következő iterációban újrapróbálkozunk
+    }
 }
 
 // =============================== ALAPBEÁLLÍTÁS =================================
@@ -200,10 +195,9 @@ bool validateCommand(byte command) {
 // =============================== FŰ PROGRAMHURK =================================
 void loop() {
   // Ellenőrizzük, hogy a LoRa aktív-e
-  if (LoRa.parsePacket() == 0 && !ensureLoRaInitialized()) {
-    // Ha nem tudjuk újrainicializálni, várunk egy kicsit
-    delay(500);
-    return;
+  if (!loraInitialized || LoRa.parsePacket() == 0) {
+    ensureLoRaInitialized();
+    return; // Ha nem sikerült, visszatérünk, de a loop folytatódik a következő iterációban
   }
 
   // ===== BIZTONSÁGI LEÁLLÍTÁS (Failsafe) =====
