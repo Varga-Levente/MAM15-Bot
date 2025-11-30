@@ -20,14 +20,7 @@ public:
   }
 
   void enterDeepSleep() {
-    #if DEBUG_ENABLED && DEBUG_SLEEP
-      Serial.println("\n💤 ═════════════════════════════════");
-      Serial.println("💤 DEEP SLEEP MÓDBA LÉPÉS...");
-      Serial.println("💤 Servók NYITVA maradnak (LANDOLO AKTÍV)");
-      Serial.println("💤 Reset gombbal való felébresztésre várva");
-      Serial.println("💤 ═════════════════════════════════\n");
-      Serial.flush();
-    #endif
+    log("🛬 Servók NYITVA maradnak (90°)");
     
     delay(SLEEP_ENTER_DELAY);
     
@@ -43,22 +36,13 @@ public:
     esp_deep_sleep_start();
   }
 
-  int getBootCount() {
-    static RTC_DATA_ATTR int bootCount = 0;
-    return bootCount;
-  }
-
-  void incrementBootCount() {
-    static RTC_DATA_ATTR int bootCount = 0;
-    bootCount++;
-  }
-
   void printBootInfo(int bootCount) {
     #if DEBUG_ENABLED && DEBUG_BOOT
-      Serial.println("\n════════════════════════════════════");
+      Serial.println("\n\n════════════════════════════════════");
       Serial.println("🛬 LANDOLÓ - DEEP SLEEP VERZIÓ");
       Serial.println("════════════════════════════════════");
-      Serial.printf("🔄 Boot count: %d\n", bootCount);
+      Serial.print("🔄 Boot count: ");
+      Serial.println(bootCount);
       
       if (bootCount > 1) {
         Serial.println("\n🔒 RESET GOMB FELÉBRESZTÉSE");

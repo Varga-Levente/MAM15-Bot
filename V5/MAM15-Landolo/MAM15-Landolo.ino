@@ -33,8 +33,12 @@ void activateLanding() {
   #if DEBUG_ENABLED
     Serial.println("\n🛬 ═════════════════════════════════");
     Serial.println("🛬 LANDOLÓ AKTIVÁLVA!");
-    Serial.println("🛬 Servók NYITVA (" + String(SERVO_OPEN_POSITION) + "°)");
-    Serial.println("🛬 LED villogása: " + String(LED_BLINK_DURATION) + " ms");
+    Serial.print("🛬 Servók NYITVA (");
+    Serial.print(SERVO_OPEN_POSITION);
+    Serial.println("°)");
+    Serial.print("🛬 LED villogása: ");
+    Serial.print(LED_BLINK_DURATION);
+    Serial.println(" ms");
     Serial.println("🛬 ═════════════════════════════════");
   #endif
 }
@@ -57,11 +61,13 @@ void handleLedBlink() {
   bool blinkFinished = led.update();
   
   if (blinkFinished) {
-    // Servók státuszának kiírása
-    servos.printStatus();
+    // LED kikapcsolás
+    led.turnOff();
     
     // WiFi kikapcsolás
     comm.disconnect();
+    
+    delay(WIFI_DISCONNECT_DELAY);
     
     // Deep sleep
     sleepMgr.enterDeepSleep();
@@ -99,9 +105,9 @@ void setup() {
     Serial.println("✅ GPIO pinok inicializálva");
   #endif
   
-  // Servók inicializálása
+  // Servók inicializálása és alappozícióba állítás
   servos.init();
-  servos.setToBootPosition(bootCount);
+  servos.setToStartPosition();
   
   // ESP-NOW inicializálás
   if (!comm.init(handleCommand)) {

@@ -42,7 +42,7 @@ public:
     unsigned long elapsed = millis() - blinkStart;
     
     if (elapsed < LED_BLINK_DURATION) {
-      // Gyors villogás
+      // Gyors villogás: 100ms be, 100ms ki
       unsigned long phase = elapsed % (LED_BLINK_ON_TIME + LED_BLINK_OFF_TIME);
       digitalWrite(LED_PIN, phase < LED_BLINK_ON_TIME ? HIGH : LOW);
       return false; // Még villog
@@ -53,7 +53,11 @@ public:
       #if DEBUG_ENABLED && DEBUG_LED
         Serial.println("\n💤 ═════════════════════════════════");
         Serial.println("💤 VILLOGÁS VÉGE - SERVÓK NYITVA MARADNAK!");
+        Serial.println("💤 DEEP SLEEP MÓDBA LÉPÉS...");
+        Serial.println("💤 Servók NYITVA: 90° (LANDOLO AKTÍV)");
+        Serial.println("💤 Reset gombbal való felébresztésre várva");
         Serial.println("💤 ═════════════════════════════════\n");
+        Serial.flush();
       #endif
       
       return true; // Villogás befejeződött

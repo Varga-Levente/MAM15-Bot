@@ -31,7 +31,9 @@ public:
     isOpen = false;
     
     #if DEBUG_ENABLED && DEBUG_SERVO
-      Serial.println("🔒 Servók ZÁRVA (" + String(SERVO_CLOSED_POSITION) + "°)");
+      Serial.print("🔒 Servók ZÁRVA (");
+      Serial.print(SERVO_CLOSED_POSITION);
+      Serial.println("°)");
     #endif
   }
 
@@ -41,18 +43,16 @@ public:
     isOpen = true;
     
     #if DEBUG_ENABLED && DEBUG_SERVO
-      Serial.println("🛬 Servók NYITVA (" + String(SERVO_OPEN_POSITION) + "°)");
+      Serial.print("🛬 Servók NYITVA (");
+      Serial.print(SERVO_OPEN_POSITION);
+      Serial.println("°)");
     #endif
   }
 
-  void setToBootPosition(int bootCount) {
-    if (bootCount == 1) {
-      close();
-      log("✅ Servók alaphelyzetben (zárva)");
-    } else {
-      open();
-      log("🔒 Servók LEZÁRVA (Reset után)");
-    }
+  void setToStartPosition() {
+    // Első boot: mindig zárva
+    close();
+    log("✅ Servók alaphelyzetben (zárva)");
   }
 
   bool getIsOpen() const {
@@ -61,7 +61,8 @@ public:
 
   void printStatus() {
     #if DEBUG_ENABLED && DEBUG_SERVO
-      Serial.println("🛬 Servók maradnak: " + String(isOpen ? "NYITVA" : "ZÁRVA"));
+      Serial.print("🛬 Servók maradnak: ");
+      Serial.println(isOpen ? "NYITVA" : "ZÁRVA");
     #endif
   }
 };

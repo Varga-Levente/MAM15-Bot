@@ -2,16 +2,6 @@
 #define SETTINGS_H
 
 // ═════════════════════════════════════════════════════════
-// DEBUG BEÁLLÍTÁSOK - KOMPONENSENKÉNT
-// ═════════════════════════════════════════════════════════
-#define DEBUG_ENABLED true         // Fő debug kapcsoló
-#define DEBUG_SERVO true           // Servo műveletek logolása
-#define DEBUG_LED true             // LED műveletek logolása
-#define DEBUG_COMM true            // Kommunikáció logolása
-#define DEBUG_SLEEP true           // Sleep műveletek logolása
-#define DEBUG_BOOT true            // Boot információk logolása
-
-// ═════════════════════════════════════════════════════════
 // HARDWARE PIN DEFINÍCIÓK
 // ═════════════════════════════════════════════════════════
 #define SERVO1_PIN 2
@@ -22,8 +12,8 @@
 // ═════════════════════════════════════════════════════════
 // SERVO POZÍCIÓK (fokban)
 // ═════════════════════════════════════════════════════════
-#define SERVO_OPEN_POSITION 5      // Nyitott állapot
-#define SERVO_CLOSED_POSITION 175  // Zárt állapot
+#define SERVO_OPEN_POSITION 175    // Nyitott állapot
+#define SERVO_CLOSED_POSITION 5    // Zárt állapot
 
 // ═════════════════════════════════════════════════════════
 // LED BEÁLLÍTÁSOK
@@ -33,10 +23,22 @@
 #define LED_BLINK_OFF_TIME 100     // LED kikapcsolva (ms)
 
 // ═════════════════════════════════════════════════════════
+// DEBUG BEÁLLÍTÁSOK - KOMPONENSENKÉNT
+// ═════════════════════════════════════════════════════════
+#define DEBUG_ENABLED true         // Fő debug kapcsoló
+
+#define DEBUG_SERVO true           // Servo műveletek logolása
+#define DEBUG_LED true             // LED műveletek logolása
+#define DEBUG_COMM true            // Kommunikáció logolása
+#define DEBUG_SLEEP true           // Sleep műveletek logolása
+#define DEBUG_BOOT true            // Boot információk logolása
+
+// ═════════════════════════════════════════════════════════
 // EGYÉB BEÁLLÍTÁSOK
 // ═════════════════════════════════════════════════════════
 #define SERIAL_BAUD_RATE 115200
 #define SERVO_INIT_DELAY 1000      // Delay servo reset után (ms)
 #define SLEEP_ENTER_DELAY 500      // Delay deep sleep előtt (ms)
+#define WIFI_DISCONNECT_DELAY 100  // Delay WiFi kikapcsolás után (ms)
 
 #endif

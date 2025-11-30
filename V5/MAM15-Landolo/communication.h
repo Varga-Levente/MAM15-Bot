@@ -25,7 +25,8 @@ private:
                      const uint8_t *incomingData, int len) {
     if (len != 1) {
       #if DEBUG_ENABLED && DEBUG_COMM
-        Serial.println("⚠️ Érvénytelen üzenet hossz: " + String(len));
+        Serial.print("⚠️ Érvénytelen üzenet hossz: ");
+        Serial.println(len);
       #endif
       return;
     }
@@ -34,7 +35,8 @@ private:
     
     #if DEBUG_ENABLED && DEBUG_COMM
       Serial.println("\n📡 ═════════════════════════════════");
-      Serial.println("📡 PARANCS ÉRKEZETT: " + String(cmd));
+      Serial.print("📡 PARANCS ÉRKEZETT: ");
+      Serial.println(cmd);
       Serial.println("📡 ═════════════════════════════════");
     #endif
     
