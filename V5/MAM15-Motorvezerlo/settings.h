@@ -1,83 +1,90 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
-// ===== DEBUG BEÁLLÍTÁSOK =====
-struct DebugSettings {
-  static const bool GLOBAL_DEBUG = true;
-  static const bool LOG_SYSTEM = true;
-  static const bool LOG_MOTOR = true;
-  static const bool LOG_COMMUNICATION = true;
-  static const bool LOG_LORA = true;
-  static const bool LOG_ESPNOW = true;
-  static const bool LOG_LANDING = true;
-  static const bool LOG_FAILSAFE = true;
-  static const bool LOG_HEALTH = true;
-};
+// ═════════════════════════════════════════════════════════
+// DEBUG BEÁLLÍTÁSOK - KOMPONENSENKÉNT
+// ═════════════════════════════════════════════════════════
+#define DEBUG_ENABLED true         // Fő debug kapcsoló
 
-// ===== LoRa KOMMUNIKÁCIÓS BEÁLLÍTÁSOK =====
-struct LoRaSettings {
-  static const int SCK_PIN = 18;
-  static const int MISO_PIN = 19;
-  static const int MOSI_PIN = 23;
-  static const int SS_PIN = 5;
-  static const int RESET_PIN = 14;
-  static const int DIO0_PIN = 2;
-  static const long FREQUENCY = 433E6;
-};
+#define DEBUG_LORA true            // LoRa kommunikáció logolása
+#define DEBUG_MOTOR true           // Motor műveletek logolása
+#define DEBUG_ESPNOW true          // ESP-NOW kommunikáció logolása
+#define DEBUG_CRC true             // CRC ellenőrzés logolása
+#define DEBUG_LANDING true         // Landoló parancsok logolása
+#define DEBUG_SPEED true           // Sebesség váltás logolása
+#define DEBUG_FAILSAFE true        // Failsafe események logolása
+#define DEBUG_HEALTH true          // Health check logolása
 
-// ===== ROBOT BEÁLLÍTÁSOK =====
-struct RobotSettings {
-  static const int ROBOT_ID = 69;
-};
+// ═════════════════════════════════════════════════════════
+// ROBOT AZONOSÍTÓ
+// ═════════════════════════════════════════════════════════
+#define ROBOT_ID 69
 
-// ===== ESP-NOW BEÁLLÍTÁSOK =====
-struct ESPNowSettings {
-  static constexpr uint8_t LANDOLO_MAC[6] = {0x1C, 0xDB, 0xD4, 0xD4, 0x0F, 0x80};
-};
+// ═════════════════════════════════════════════════════════
+// LORA KOMMUNIKÁCIÓS BEÁLLÍTÁSOK
+// ═════════════════════════════════════════════════════════
+#define LORA_SCK_PIN 18
+#define LORA_MISO_PIN 19
+#define LORA_MOSI_PIN 23
+#define LORA_SS_PIN 5
+#define LORA_RESET_PIN 14
+#define LORA_DIO0_PIN 2
+#define LORA_FREQUENCY 433E6
 
-// ===== CRC ELLENŐRZÉS BEÁLLÍTÁSAI =====
-struct CRCSettings {
-  static const uint16_t POLYNOMIAL = 0x1021;
-  static const uint16_t INITIAL_VALUE = 0xFFFF;
-  static const uint16_t FINAL_XOR_VALUE = 0x0000;
-};
+// ═════════════════════════════════════════════════════════
+// LORA HEALTH MONITOR BEÁLLÍTÁSOK
+// ═════════════════════════════════════════════════════════
+#define LORA_HEALTH_CHECK_INTERVAL 5000     // Health check időköz (ms)
+#define LORA_RECONNECT_TIMEOUT 10000        // Újracsatlakozási timeout (ms)
+#define MAX_LORA_RESTARTS 3                 // Max újraindítási kísérletek
 
-// ===== MOTOR PIN DEFINÍCIÓK =====
-struct MotorPins {
-  static const int LEFT_FORWARD = 32;
-  static const int LEFT_REVERSE = 27;
-  static const int RIGHT_FORWARD = 25;
-  static const int RIGHT_REVERSE = 26;
-};
+// ═════════════════════════════════════════════════════════
+// ESP-NOW BEÁLLÍTÁSOK - LANDOLÓ MAC CÍME
+// ═════════════════════════════════════════════════════════
+#define LANDOLO_MAC_0 0x1C
+#define LANDOLO_MAC_1 0xDB
+#define LANDOLO_MAC_2 0xD4
+#define LANDOLO_MAC_3 0xD4
+#define LANDOLO_MAC_4 0x0F
+#define LANDOLO_MAC_5 0x80
 
-// ===== PWM BEÁLLÍTÁSOK =====
-struct PWMSettings {
-  static const int FREQUENCY = 1000;
-  static const int RESOLUTION = 8;
-};
+// ═════════════════════════════════════════════════════════
+// CRC ELLENŐRZÉS BEÁLLÍTÁSAI
+// ═════════════════════════════════════════════════════════
+#define CRC_POLYNOMIAL 0x1021
+#define CRC_INITIAL_VALUE 0xFFFF
+#define CRC_FINAL_XOR_VALUE 0x0000
 
-// ===== SEBESSÉG SZINTEK =====
-struct SpeedSettings {
-  static constexpr int LEVELS[3] = {255, 120, 90};
-  static const int DEFAULT_LEVEL = 0;
-};
+// ═════════════════════════════════════════════════════════
+// MOTOR VEZÉRLŐ PIN DEFINÍCIÓK
+// ═════════════════════════════════════════════════════════
+#define LEFT_MOTOR_FORWARD_PIN 32
+#define LEFT_MOTOR_REVERSE_PIN 27
+#define RIGHT_MOTOR_FORWARD_PIN 25
+#define RIGHT_MOTOR_REVERSE_PIN 26
 
-// ===== BIZTONSÁGI BEÁLLÍTÁSOK =====
-struct SafetySettings {
-  static const unsigned long FAILSAFE_TIMEOUT_MS = 300;
-};
+// ═════════════════════════════════════════════════════════
+// PWM BEÁLLÍTÁSOK
+// ═════════════════════════════════════════════════════════
+#define PWM_FREQUENCY 1000
+#define PWM_RESOLUTION 8
 
-// ===== LoRa HEALTH MONITOR BEÁLLÍTÁSOK =====
-struct HealthSettings {
-  static const unsigned long CHECK_INTERVAL_MS = 5000;
-  static const unsigned long RECONNECT_TIMEOUT_MS = 10000;
-  static const int MAX_RESTART_COUNT = 3;
-};
+// ═════════════════════════════════════════════════════════
+// SEBESSÉG SZINTEK (0-255)
+// ═════════════════════════════════════════════════════════
+#define SPEED_LEVEL_1 255          // Maximális sebesség
+#define SPEED_LEVEL_2 120          // Közepes sebesség
+#define SPEED_LEVEL_3 90           // Lassú sebesség
 
-// ===== CSOMAG BEÁLLÍTÁSOK =====
-struct PacketSettings {
-  static const int EXPECTED_SIZE = 6;  // Robot ID + Motor + Speed + Landing + CRC(2)
-  static const int DATA_SIZE = 4;      // CRC nélkül
-};
+// ═════════════════════════════════════════════════════════
+// BIZTONSÁGI BEÁLLÍTÁSOK (FAILSAFE)
+// ═════════════════════════════════════════════════════════
+#define FAILSAFE_TIMEOUT_MS 300    // Failsafe timeout (ms)
+
+// ═════════════════════════════════════════════════════════
+// EGYÉB BEÁLLÍTÁSOK
+// ═════════════════════════════════════════════════════════
+#define SERIAL_BAUD_RATE 115200
+#define PACKET_SIZE 6              // LoRa csomag mérete
 
 #endif
