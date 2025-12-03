@@ -130,7 +130,7 @@ void loop() {
   // Az ESP-NOW osztály automatikusan kezeli a funkciót:
   //   - Ha ESP-NOW aktív: landoló parancs küldése
   //   - Ha ESP-NOW inaktív: PIN22 toggle
-  espnow.handleLandingButton(data.landingState);
+  espnow.handleLandingState(data.landingState);
   
   // ===== SEBESSÉG VÁLTÁS KEZELÉSE =====
   motors.handleSpeedButton(data.speedButtonPressed);

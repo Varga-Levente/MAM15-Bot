@@ -10,8 +10,7 @@ private:
   uint8_t landoloMAC[6];
   bool previousLandingState;
   bool espnowActive;
-  bool previousButtonState;
-  bool pin22State;
+  bool espnowPermanentlyDisabled;
   
   static ESPNowCommunication* instance;
 
@@ -48,14 +47,19 @@ private:
       Serial.println("📥 ╚═══════════════════════════════╝");
     #endif
     
-    // ACK_SERVO_OPENED = 100 - Csak logolás, már nem állítjuk le az ESP-NOW-t
-    if (ackCode == 100) {
+    // ACK_SERVO_OPENED = 100
+    if (ackCode == 200) {
       #if DEBUG_ENABLED && DEBUG_LANDING
         Serial.println("\n✅ ╔═══════════════════════════════╗");
         Serial.println("✅ LANDOLÓ VISSZAIGAZOLÁS:");
         Serial.println("✅ Servo sikeresen kinyílt!");
+        Serial.println("✅ ESP-NOW VÉGLEGESEN leállítása...");
+        Serial.println("✅ PIN22 LED vezérlés továbbra is aktív");
         Serial.println("✅ ╚═══════════════════════════════╝\n");
       #endif
+      
+      // ESP-NOW VÉGLEGESEN leállítása
+      shutdownPermanently();
     }
   }
 
@@ -75,8 +79,7 @@ public:
   ESPNowCommunication() 
     : previousLandingState(false)
     , espnowActive(false)
-    , previousButtonState(false)
-    , pin22State(false) {
+    , espnowPermanentlyDisabled(false) {
     instance = this;
     landoloMAC[0] = LANDOLO_MAC_0;
     landoloMAC[1] = LANDOLO_MAC_1;
@@ -87,20 +90,19 @@ public:
   }
 
   bool init() {
-    // LED_FLASH_PIN inicializálása kimenetként
+    // LED_FLASH_PIN inicializálása kimenetként (LOW = alapértelmezett)
     pinMode(LED_FLASH_PIN, OUTPUT);
     digitalWrite(LED_FLASH_PIN, LOW);
-    pin22State = false;
     
     #if DEBUG_ENABLED && DEBUG_LED_FLASH
-      Serial.println("📍 LED_FLASH_PIN inicializálva (LOW)");
+      Serial.println("🔦 LED_FLASH_PIN (22) inicializálva: LOW");
     #endif
     
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     
     #if DEBUG_ENABLED && DEBUG_ESPNOW
-      Serial.print("📍 Motorvezérlő ESP32 saját MAC: ");
+      Serial.print("🔐 Motorvezérlő ESP32 saját MAC: ");
       Serial.println(WiFi.macAddress());
     #endif
     
@@ -127,7 +129,7 @@ public:
     }
     
     #if DEBUG_ENABLED && DEBUG_ESPNOW
-      Serial.print("📍 Landoló cél MAC: ");
+      Serial.print("🔐 Landoló cél MAC: ");
       for (int i = 0; i < 6; i++) {
         Serial.printf("%02X", landoloMAC[i]);
         if (i < 5) Serial.print(":");
@@ -136,13 +138,18 @@ public:
     #endif
     
     espnowActive = true;
+    espnowPermanentlyDisabled = false;
     return true;
   }
 
   void sendLandingCommand(bool landingState) {
-    if (!espnowActive) {
+    if (!espnowActive || espnowPermanentlyDisabled) {
       #if DEBUG_ENABLED && DEBUG_ESPNOW
-        Serial.println("⚠️ ESP-NOW nem aktív, parancs nem küldhető!");
+        if (espnowPermanentlyDisabled) {
+          Serial.println("⚠️ ESP-NOW véglegesen letiltva (ACK után)");
+        } else {
+          Serial.println("⚠️ ESP-NOW nem aktív, parancs nem küldhető!");
+        }
       #endif
       return;
     }
@@ -162,51 +169,51 @@ public:
     #endif
   }
 
-  void handleLandingButton(bool currentButtonState) {
-    // Gombnyomás detektálása (rising edge)
-    bool buttonPressed = currentButtonState && !previousButtonState;
-    previousButtonState = currentButtonState;
-    
-    if (!buttonPressed) {
-      return; // Csak gombnyomásra reagálunk
+  void handleLandingState(bool currentLandingState) {
+    // Csak akkor reagálunk, ha az állapot megváltozott
+    if (currentLandingState == previousLandingState) {
+      return;
     }
     
-    // ═══════════════════════════════════════════════════════
-    // PÁRHUZAMOS MŰKÖDÉS: ESP-NOW + PIN22 TOGGLE
-    // ═══════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════
+    // KÉT FÜGGETLEN FUNKCIÓ:
+    // 1. ESP-NOW: Csak első alkalommal küld, ACK után letiltva
+    // 2. PIN22 LED: Mindig követi a landingState-et
+    // ══════════════════════════════════════════════════════
     
-    // 1️⃣ ESP-NOW parancs küldése (ha aktív)
-    if (espnowActive) {
-      bool newLandingState = !previousLandingState;
-      sendLandingCommand(newLandingState);
-      previousLandingState = newLandingState;
+    // 1️⃣ ESP-NOW parancs küldése (csak ha még aktív és nem letiltva)
+    if (espnowActive && !espnowPermanentlyDisabled) {
+      sendLandingCommand(currentLandingState);
       
       #if DEBUG_ENABLED && DEBUG_LANDING
-        Serial.print("🔄 Landoló állapot váltás: ");
-        Serial.println(newLandingState ? "AKTÍV" : "INAKTÍV");
+        Serial.print("🔄 Landoló állapot változás: ");
+        Serial.println(currentLandingState ? "AKTÍV" : "INAKTÍV");
       #endif
     }
     
-    // 2️⃣ LED_FLASH_PIN Toggle (MINDIG, ESP-NOW állapottól függetlenül)
-    pin22State = !pin22State;
-    digitalWrite(LED_FLASH_PIN, pin22State ? HIGH : LOW);
+    // 2️⃣ PIN22 LED vezérlése (MINDIG, ESP-NOW állapottól függetlenül)
+    digitalWrite(LED_FLASH_PIN, currentLandingState ? HIGH : LOW);
     
     #if DEBUG_ENABLED && DEBUG_LED_FLASH
-      Serial.println("\n🔀 ╔═══════════════════════════════╗");
-      Serial.print("🔀 LED_FLASH_PIN TOGGLE: ");
-      Serial.println(pin22State ? "HIGH" : "LOW");
-      Serial.println("🔀 ╚═══════════════════════════════╝\n");
+      Serial.println("\n🔦 ╔═══════════════════════════════╗");
+      Serial.print("🔦 PIN22 LED: ");
+      Serial.println(currentLandingState ? "HIGH (ON)" : "LOW (OFF)");
+      Serial.println("🔦 ╚═══════════════════════════════╝\n");
     #endif
+    
+    // Állapot mentése
+    previousLandingState = currentLandingState;
   }
 
-  void shutdown() {
+  void shutdownPermanently() {
     if (!espnowActive) {
       return;
     }
     
     #if DEBUG_ENABLED && DEBUG_ESPNOW
       Serial.println("\n🔌 ╔═══════════════════════════════╗");
-      Serial.println("🔌 ESP-NOW LEÁLLÍTÁS");
+      Serial.println("🔌 ESP-NOW VÉGLEGES LEÁLLÍTÁS");
+      Serial.println("🔌 Újraindításig nem aktiválható!");
       Serial.println("🔌 ╚═══════════════════════════════╝");
     #endif
     
@@ -215,12 +222,13 @@ public:
     WiFi.mode(WIFI_OFF);
     
     espnowActive = false;
+    espnowPermanentlyDisabled = true;
     
     #if DEBUG_ENABLED && DEBUG_ESPNOW
       Serial.println("✅ ESP-NOW leállítva");
       Serial.println("✅ WiFi kikapcsolva");
       Serial.println("✅ Motorvezérlő tisztán LoRa módban");
-      Serial.println("✅ LED_FLASH_PIN toggle továbbra is működik\n");
+      Serial.println("✅ PIN22 LED vezérlés AKTÍV marad\n");
     #endif
   }
 
@@ -228,8 +236,8 @@ public:
     return espnowActive;
   }
   
-  bool getPin22State() const {
-    return pin22State;
+  bool isPermanentlyDisabled() const {
+    return espnowPermanentlyDisabled;
   }
 };
 
